@@ -1,5 +1,0 @@
-| DHT11 | Pico               |
-| ----- | ------------------ |
-| VCC   | 3.3V               |
-| DATA  | GP15 (par exemple) |
-| GND   | GND                |
