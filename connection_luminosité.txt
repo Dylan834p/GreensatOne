@@ -1,0 +1,6 @@
+| GY-302 | Pico |
+| ------ | ---- |
+| VCC    | 3.3V |
+| GND    | GND  |
+| SDA    | GP0  |
+| SCL    | GP1  |
