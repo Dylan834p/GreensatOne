@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test GreenSat</title>
+    <meta http-equiv="refresh" content="2">
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 50px; background: #eee;}
+        .box { background: white; padding: 20px; border-radius: 10px; display: inline-block; box-shadow: 0 0 10px #ccc; }
+        h1 { color: #2ecc71; }
+        .big { font-size: 2em; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>🛰️ Test Rapide GreenSat</h1>
+    
+    {% if d %}
+    <div class="box">
+        <p>Dernière mise à jour : {{ d.date_time }}</p>
+        <hr>
+        <p>🌡️ Température: <span class="big">{{ d.temp }}°C</span></p>
+        <p>💧 Humidité: <span class="big">{{ d.hum }}%</span></p>
+        <p>☠️ Gaz: <span class="big">{{ d.gaz_pct }}%</span></p>
+        <p>☀️ Lumière: <span class="big">{{ d.lux }} Lx</span></p>
+        <p>☁️ Pression: <span class="big">{{ d.press }} hPa</span></p>
+    </div>
+    {% else %}
+        <h2>⏳ En attente de données du Pico...</h2>
+        <p>(Vérifie que bridge.py tourne bien !)</p>
+    {% endif %}
+</body>
+</html>
