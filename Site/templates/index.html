@@ -21,35 +21,26 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
     
     <style>
-        /* Styles spécifiques pour la navigation du graphique */
         #chart-nav-controls {
-            display: none; /* Caché par défaut (mode 24h) */
-            align-items: center;
-            gap: 1rem;
-            margin-top: 1rem;
-            width: 100%;
-            justify-content: center;
-            padding-top: 1rem;
-            border-top: 1px solid rgba(255,255,255,0.05);
+            display: none; 
+            align-items: center; gap: 1rem; margin-top: 1rem; width: 100%; justify-content: center;
+            padding-top: 1rem; border-top: 1px solid rgba(255,255,255,0.05);
         }
         .nav-btn {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.1);
-            color: white;
-            border-radius: 50%;
-            width: 32px; height: 32px;
-            display: flex; align-items: center; justify-content: center;
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: white;
+            border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
             cursor: pointer; transition: all 0.2s;
         }
+        /* Ajustement Light Mode pour les boutons */
+        body.light-mode .nav-btn { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.1); color: #333; }
+        body.light-mode #chart-nav-controls { border-top-color: rgba(0,0,0,0.05); }
+
         .nav-btn:hover { background: rgba(255,255,255,0.2); transform: scale(1.1); }
-        .nav-btn.disabled { opacity: 0; pointer-events: none; } /* On cache la flèche droite si pas besoin */
+        .nav-btn.disabled { opacity: 0; pointer-events: none; }
         
         #nav-label {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.9rem;
-            color: var(--c-accent-secondary);
-            font-weight: 700;
-            min-width: 150px; text-align: center;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; color: var(--c-accent-secondary);
+            font-weight: 700; min-width: 150px; text-align: center;
         }
     </style>
 </head>
@@ -188,10 +179,15 @@
             </div>
         </div>
 
-        <footer class="flex flex-col items-center justify-center mt-12 opacity-30 txt-mono text-xs px-4 gap-4">
+        <footer class="flex flex-row items-center justify-center mt-12 opacity-30 txt-mono text-xs px-4 gap-4 pb-8">
             <div>GREENSAT ONE PROJECT // ID: #GS1-2024-X // <span id="connection-status">SEARCHING SIGNAL...</span></div>
-            <button id="audio-toggle" class="border border-white/20 px-3 py-1 rounded hover:bg-white/10 transition-colors uppercase">
+            
+            <button id="audio-toggle" class="border border-white/20 px-3 py-1 rounded hover:bg-white/10 transition-colors uppercase cursor-pointer">
                 [ AUDIO: OFF ]
+            </button>
+
+            <button id="theme-toggle" class="border border-white/20 px-3 py-1 rounded hover:bg-white/10 transition-colors uppercase cursor-pointer">
+                [ MODE: DARK ]
             </button>
         </footer>
 
