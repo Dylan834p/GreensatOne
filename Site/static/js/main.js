@@ -1,5 +1,5 @@
 /* =========================================
-   MAIN.JS - NAVIGATION INTELLIGENTE (LIMITES)
+   MAIN.JS - NAVIGATION OPTIMISÉE (PERFORMANCE)
    ========================================= */
 
 import * as THREE from 'three';
@@ -188,56 +188,46 @@ function initOrb() {
 }
 
 /* =========================================================================
-   6. DATA & SMART NAVIGATION (AVEC LIMITES)
+   6. DATA & SMART NAVIGATION (AVEC LIMITES & OPTIMISATION)
    ========================================================================= */
 
 let mainChart;
 let currentChartMode = 'thermal';
-let viewMode = 'day'; // day, week, month, year
+let viewMode = 'day'; 
 let currentReferenceDate = new Date(); 
-let databaseMinDate = null; // La date la plus vieille de la base (pour cacher la flèche gauche)
+let databaseMinDate = null; 
 
-// Au démarrage, on demande à la base : "C'est quoi ta date la plus vieille ?"
 async function initLimits() {
     try {
         const res = await fetch('/api/limits');
         const data = await res.json();
         if (data.first_date) {
             databaseMinDate = new Date(data.first_date);
-            console.log("📅 Database Start:", databaseMinDate);
         }
     } catch(e) { console.error(e); }
 }
 
-// Helpers
 function formatDateTimeISO(d) { return d.toISOString().replace('T', ' ').split('.')[0]; }
 
-// Calcul des plages
 function getDateRange() {
     let start = new Date(currentReferenceDate);
     let end = new Date(currentReferenceDate);
     
-    // NOUVEAU : 24H n'est plus "Live" pur, c'est une journée navigable
     if (viewMode === 'day') {
         start.setHours(0,0,0,0);
         end.setHours(23,59,59);
-        
-        // Label : "19 Jan 2026" ou "Aujourd'hui"
         const now = new Date();
         let label = `${start.getDate()}/${start.getMonth()+1}/${start.getFullYear()}`;
         if (start.toDateString() === now.toDateString()) label = "LIVE TODAY";
-        
         return { start: formatDateTimeISO(start), end: formatDateTimeISO(end), label: label };
     }
     else if (viewMode === 'week') {
         const day = start.getDay() || 7; 
         if (day !== 1) start.setHours(-24 * (day - 1));
         else start.setHours(0,0,0,0);
-        
         end = new Date(start);
         end.setDate(start.getDate() + 6);
         end.setHours(23,59,59);
-        
         const label = `${start.getDate()}/${start.getMonth()+1} - ${end.getDate()}/${end.getMonth()+1}`;
         return { start: formatDateTimeISO(start), end: formatDateTimeISO(end), label: label };
     }
@@ -247,7 +237,6 @@ function getDateRange() {
         end.setMonth(start.getMonth() + 1);
         end.setDate(0); 
         end.setHours(23,59,59);
-        
         const label = start.toLocaleString('en-US', { month: 'long', year: 'numeric' }).toUpperCase();
         return { start: formatDateTimeISO(start), end: formatDateTimeISO(end), label: label };
     }
@@ -257,14 +246,11 @@ function getDateRange() {
         end.setFullYear(start.getFullYear() + 1);
         end.setDate(0); 
         end.setHours(23,59,59);
-        
         return { start: formatDateTimeISO(start), end: formatDateTimeISO(end), label: start.getFullYear() };
     }
 }
 
-// Navigation par flèches
 window.changeDate = function(direction) {
-    // On ajoute/enlève selon le mode
     if (viewMode === 'day') {
         currentReferenceDate.setDate(currentReferenceDate.getDate() + direction);
     } else if (viewMode === 'week') {
@@ -274,40 +260,31 @@ window.changeDate = function(direction) {
     } else if (viewMode === 'year') {
         currentReferenceDate.setFullYear(currentReferenceDate.getFullYear() + direction);
     }
-    
     updateNavUI();
     loadHistoryData();
     sfx.playBeep(1000, 'square', 0.05);
 }
 
-// Sélection Période (24H / 7D / 30D / 1Y)
 window.switchTimeRange = function(range) {
     viewMode = range;
-    currentReferenceDate = new Date(); // On revient à "Maintenant" quand on change de mode
-    
+    currentReferenceDate = new Date(); 
     document.querySelectorAll('.time-tab').forEach(b => b.classList.remove('active'));
     if(event && event.target) event.target.classList.add('active');
-
-    // On affiche TOUJOURS la barre de nav maintenant (car 24H est navigable)
     const navControls = document.getElementById('chart-nav-controls');
     if (navControls) navControls.style.display = 'flex'; 
-    
     updateNavUI();
     loadHistoryData();
     sfx.playBeep(800, 'sine', 0.1);
 }
 
-// Gestion intelligente des flèches
 function updateNavUI() {
     const rangeData = getDateRange();
     document.getElementById('nav-label').innerText = rangeData.label;
     
-    const prevBtn = document.querySelector('.nav-btn:first-child'); // Flèche gauche
-    const nextBtn = document.getElementById('nav-next'); // Flèche droite
+    const prevBtn = document.querySelector('.nav-btn:first-child');
+    const nextBtn = document.getElementById('nav-next');
     const now = new Date();
     
-    // 1. FLÈCHE DROITE (FUTUR)
-    // Si la fin de la période affichée est >= maintenant, on cache
     if (new Date(rangeData.end) >= now) {
         nextBtn.classList.add('disabled');
         nextBtn.style.opacity = '0';
@@ -318,8 +295,6 @@ function updateNavUI() {
         nextBtn.style.pointerEvents = 'auto';
     }
 
-    // 2. FLÈCHE GAUCHE (PASSÉ LOINTAIN)
-    // Si le début de la période affichée est <= date la plus vieille en base
     if (databaseMinDate && new Date(rangeData.start) <= databaseMinDate) {
         prevBtn.classList.add('disabled');
         prevBtn.style.opacity = '0';
@@ -344,8 +319,12 @@ let chartHistory = { labels: [], temp: [], hum: [], gas: [], press: [], lux: [] 
 
 async function loadHistoryData() {
     const range = getDateRange();
-    // On appelle l'API avec start et end
-    const url = `/api/history?start=${range.start}&end=${range.end}`;
+    
+    // OPTIMISATION : On demande une résolution spéciale au serveur pour l'année
+    let resolution = 'raw';
+    if (viewMode === 'year') resolution = 'day';
+    
+    const url = `/api/history?start=${range.start}&end=${range.end}&resolution=${resolution}`;
 
     try {
         const response = await fetch(url);
@@ -358,11 +337,10 @@ async function loadHistoryData() {
             let label = "";
             const dateObj = new Date(d.date_time);
             
-            // Format axe X selon le mode
-            if (viewMode === 'day') label = d.date_time.split(' ')[1].substring(0, 5); // 14:00
+            if (viewMode === 'day') label = d.date_time.split(' ')[1].substring(0, 5); 
             else if (viewMode === 'week') label = `${dateObj.getDate()}/${dateObj.getMonth()+1} ${dateObj.getHours()}h`;
             else if (viewMode === 'month') label = `${dateObj.getDate()}/${dateObj.getMonth()+1}`;
-            else if (viewMode === 'year') label = `${dateObj.getMonth()+1}/${dateObj.getFullYear()}`;
+            else if (viewMode === 'year') label = `${dateObj.getDate()}/${dateObj.getMonth()+1}`; // Jour/Mois pour l'année
 
             chartHistory.labels.push(label);
             chartHistory.temp.push(d.temp);
@@ -390,19 +368,22 @@ function updateChartData() {
         return g;
     };
 
+    // OPTIMISATION : Point radius 0 pour éviter le lag sur des milliers de points
+    const pointSettings = { radius: 0, hitRadius: 10, hoverRadius: 5 };
+
     if(currentChartMode === 'thermal') {
         mainChart.data.datasets.push(
-            { label: 'TEMP', data: chartHistory.temp, borderColor: '#ff2e5c', backgroundColor: grad('#ff2e5c'), fill: true, tension: 0.4, pointRadius: 0 },
-            { label: 'HUM', data: chartHistory.hum, borderColor: '#2e5cff', backgroundColor: grad('#2e5cff'), fill: true, tension: 0.4, pointRadius: 0 }
+            { label: 'TEMP', data: chartHistory.temp, borderColor: '#ff2e5c', backgroundColor: grad('#ff2e5c'), fill: true, tension: 0.4, pointRadius: 0, hitRadius: 10, hoverRadius: 5 },
+            { label: 'HUM', data: chartHistory.hum, borderColor: '#2e5cff', backgroundColor: grad('#2e5cff'), fill: true, tension: 0.4, pointRadius: 0, hitRadius: 10, hoverRadius: 5 }
         );
     } else if (currentChartMode === 'air') {
         mainChart.data.datasets.push(
-            { label: 'GAS', data: chartHistory.gas, borderColor: '#00ffa3', backgroundColor: grad('#00ffa3'), fill: true, tension: 0.4, pointRadius: 0 },
-            { label: 'PRES', data: chartHistory.press, borderColor: '#b0b0b0', borderDash: [5,5], fill: false, tension: 0.4, pointRadius: 0, yAxisID: 'y1' }
+            { label: 'GAS', data: chartHistory.gas, borderColor: '#00ffa3', backgroundColor: grad('#00ffa3'), fill: true, tension: 0.4, pointRadius: 0, hitRadius: 10, hoverRadius: 5 },
+            { label: 'PRES', data: chartHistory.press, borderColor: '#b0b0b0', borderDash: [5,5], fill: false, tension: 0.4, pointRadius: 0, yAxisID: 'y1', hitRadius: 10, hoverRadius: 5 }
         );
     } else if (currentChartMode === 'light') {
          mainChart.data.datasets.push(
-            { label: 'LUX', data: chartHistory.lux, borderColor: '#ffb800', backgroundColor: grad('#ffb800'), fill: true, tension: 0.4, pointRadius: 0 }
+            { label: 'LUX', data: chartHistory.lux, borderColor: '#ffb800', backgroundColor: grad('#ffb800'), fill: true, tension: 0.4, pointRadius: 0, hitRadius: 10, hoverRadius: 5 }
         );
     }
     mainChart.update();
@@ -419,7 +400,9 @@ if(document.getElementById('mainChart')) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            animation: false,
+            animation: false, // OPTIMISATION CRITIQUE : Pas d'anim sur les gros datasets
+            normalized: true, // OPTIMISATION : Aide Chart.js à rendre plus vite
+            spanGaps: true,   // Evite les bugs si un point manque
             interaction: { mode: 'index', intersect: false },
             plugins: { legend: { display: false } },
             scales: {
@@ -432,7 +415,7 @@ if(document.getElementById('mainChart')) {
     window.switchChart('thermal');
 }
 
-// Fonction Live (Rafraîchissement automatique)
+// Fonction Live
 async function fetchData() {
     try {
         const response = await fetch('/api/data');
@@ -472,8 +455,6 @@ async function fetchData() {
             if(cardOrb) cardOrb.classList.remove('alert-critical');
         }
 
-        // IMPORTANT : Le Graphique Live ne se met à jour QUE si on regarde "Aujourd'hui" en mode 24H
-        // Sinon ça écraserait la navigation
         const isToday = new Date().toDateString() === currentReferenceDate.toDateString();
         if (viewMode === 'day' && isToday) {
             const timeLabel = data.date_time.split(' ')[1].substring(0, 5);
@@ -485,7 +466,6 @@ async function fetchData() {
                 chartHistory.press.push(data.press);
                 chartHistory.lux.push(data.lux);
                 
-                // On garde une fenêtre glissante pour le live
                 if (chartHistory.labels.length > 200) { 
                     chartHistory.labels.shift();
                     chartHistory.temp.shift(); chartHistory.hum.shift();
@@ -524,9 +504,7 @@ window.addEventListener('load', () => {
     initOrb();
     init3DScene();
     
-    // 1. On récupère les limites de la DB (pour savoir quand cacher les flèches)
     initLimits().then(() => {
-        // 2. On lance la vue "24H" par défaut (Aujourd'hui)
         switchTimeRange('day');
     });
     
@@ -537,7 +515,6 @@ window.addEventListener('load', () => {
         .from(".glass", { y: 50, opacity: 0, duration: 0.8, stagger: 0.1, ease: "back.out(1.2)" }, "-=0.6");
     }
     
-    // On lance la boucle de refresh live
     setInterval(fetchData, 2000);
     console.log("System online.");
 });
