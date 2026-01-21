@@ -89,4 +89,4 @@ while True:
     except Exception as e:
         print(f"❌ Oupsie : {e}")
 
-    time.sleep(2)
+    time.sleep(300) # Pause de 5 minutes avant la prochaine lecture
