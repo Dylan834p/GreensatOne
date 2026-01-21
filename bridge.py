@@ -21,6 +21,7 @@ def save_to_db(data):
     """Insère la donnée dans la base SQLite"""
     try:
         conn = sqlite3.connect(DB_PATH)
+        conn.execute('PRAGMA journal_mode=WAL;')
         cursor = conn.cursor()
         
         # On insère les valeurs
