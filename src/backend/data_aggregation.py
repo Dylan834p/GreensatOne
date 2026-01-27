@@ -8,11 +8,11 @@ def get_brackets():
     t = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     
     return [
-        # Changed 5 to 1 minute for "Yesterday"
-        ("Yesterday", t - timedelta(days=1), t, 1), 
+        ("Yesterday", t - timedelta(days=1), t, 1),
         ("Last Week", t - timedelta(days=7), t - timedelta(days=1), 15),
         ("Last Month", t - timedelta(days=30), t - timedelta(days=7), 30),
         ("Last 2 Months", t - timedelta(days=60), t - timedelta(days=30), 60),
+        ("Remaining Year", t - timedelta(days=365), t - timedelta(days=60), 60),
         ("Historical", datetime.min, t - timedelta(days=365), 180),
     ]
 
