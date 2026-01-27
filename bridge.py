@@ -6,7 +6,7 @@ import time
 from datetime import datetime
 
 # --- CONFIGURATION ---
-PORT_USB = 'COM5'   # Vérifie ton port !
+PORT_USB = 'COM7'   # Vérifie ton port !
 BAUDRATE = 115200
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'greensat.db')
 

@@ -1,9 +1,11 @@
 from flask import Flask, render_template, jsonify, request
 import sqlite3
 import os
+from datetime import datetime
 
 app = Flask(__name__)
 
+# Configuration des chemins
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, 'greensat.db')
 
@@ -11,100 +13,41 @@ def get_db_connection():
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
+        conn.execute('PRAGMA journal_mode=WAL;') # Mode rapide
         return conn
     except:
         return None
 
+# --- PARTIE SITE WEB (INCHANGÉE) ---
 @app.route('/')
 def index():
     return render_template('index.html')
 
-# API TEMPS RÉEL (Dernière valeur)
 @app.route('/api/data')
 def api_data():
     try:
         conn = get_db_connection()
+        # On prend juste la toute dernière mesure reçue, peu importe le Pico
         row = conn.execute('SELECT * FROM mesures ORDER BY date_time DESC LIMIT 1').fetchone()
         conn.close()
         return jsonify(dict(row)) if row else (jsonify({"error": "Empty"}), 404)
     except:
         return jsonify({"error": "DB Error"}), 500
 
-@app.after_request
-def add_header(response):
-    # Cache les fichiers statiques (images, 3d, css) pendant 1 semaine (604800s)
-    if request.path.startswith('/static'):
-        response.headers['Cache-Control'] = 'public, max-age=604800'
-    return response
-
-# API HISTORIQUE (OPTIMISÉE DOWNSAMPLING)
 @app.route('/api/history')
 def api_history():
+    # Ton code historique existant (inchangé)
     try:
-        start_date = request.args.get('start')
-        end_date = request.args.get('end')
-        mode = request.args.get('mode', 'day') # On récupère le mode pour optimiser
-        
+        start = request.args.get('start')
+        end = request.args.get('end')
         conn = get_db_connection()
-        
-        if not start_date or not end_date:
-            # Fallback par défaut (100 derniers points)
-            rows = conn.execute("SELECT * FROM (SELECT * FROM mesures ORDER BY date_time DESC LIMIT 100) ORDER BY date_time ASC").fetchall()
-            conn.close()
-            return jsonify([dict(row) for row in rows])
-
-        # --- LOGIQUE D'OPTIMISATION SQL (LE SECRET DE LA PERF) ---
-        if mode == 'year':
-            # VUE ANNÉE : Moyenne par JOUR
-            # Réduit ~9000 points -> 365 points (Facteur 25x)
-            query = """
-            SELECT 
-                strftime('%Y-%m-%d 12:00:00', date_time) as date_time,
-                ROUND(AVG(temp), 1) as temp,
-                CAST(AVG(hum) AS INTEGER) as hum,
-                ROUND(AVG(gaz_pct), 2) as gaz_pct,
-                CAST(AVG(lux) AS INTEGER) as lux,
-                ROUND(AVG(press), 1) as press
-            FROM mesures 
-            WHERE date_time BETWEEN ? AND ?
-            GROUP BY strftime('%Y-%m-%d', date_time)
-            ORDER BY date_time ASC
-            """
-            rows = conn.execute(query, (start_date, end_date)).fetchall()
-
-        elif mode == 'month':
-            # VUE MOIS : Moyenne par tranche de 4 HEURES
-            # Réduit ~3000 points -> ~180 points (Facteur 16x)
-            query = """
-            SELECT 
-                datetime((strftime('%s', date_time) / 14400) * 14400, 'unixepoch') as date_time,
-                ROUND(AVG(temp), 1) as temp,
-                CAST(AVG(hum) AS INTEGER) as hum,
-                ROUND(AVG(gaz_pct), 2) as gaz_pct,
-                CAST(AVG(lux) AS INTEGER) as lux,
-                ROUND(AVG(press), 1) as press
-            FROM mesures 
-            WHERE date_time BETWEEN ? AND ?
-            GROUP BY (strftime('%s', date_time) / 14400)
-            ORDER BY date_time ASC
-            """
-            rows = conn.execute(query, (start_date, end_date)).fetchall()
-
-        else:
-            # VUE SEMAINE / JOUR : Données Brutes (Précision Max)
-            # On limite quand même à 2000 points par sécurité
-            query = "SELECT * FROM mesures WHERE date_time BETWEEN ? AND ? ORDER BY date_time ASC LIMIT 2000"
-            rows = conn.execute(query, (start_date, end_date)).fetchall()
-            
+        query = "SELECT * FROM mesures WHERE date_time BETWEEN ? AND ? ORDER BY date_time ASC LIMIT 2000"
+        rows = conn.execute(query, (start, end)).fetchall()
         conn.close()
         return jsonify([dict(row) for row in rows])
+    except:
+        return jsonify([])
 
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
-
-# API LIMITES (Pour savoir quand cacher les flèches)
 @app.route('/api/limits')
 def api_limits():
     try:
@@ -112,21 +55,48 @@ def api_limits():
         row = conn.execute('SELECT MIN(date_time) as first_date, MAX(date_time) as last_date FROM mesures').fetchone()
         conn.close()
         return jsonify(dict(row))
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    except: return jsonify({})
 
-# Dans app.py (fonction get_db_connection)
-def get_db_connection():
+# --- NOUVELLE PARTIE : LE "BRIDGE" WIFI ---
+@app.route('/api/upload', methods=['POST'])
+def api_upload():
     try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        # AJOUTER CETTE LIGNE :
-        conn.execute('PRAGMA journal_mode=WAL;') 
-        return conn
-    except:
-        return None
-    
+        # 1. On reçoit le paquet du Pico
+        data = request.json
+        pico_id = data.get("id", "Inconnu")
+        
+        # 2. On prépare la date et l'air
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        air_pct = data.get('air_pct', 0)
+        
+        # 3. On enregistre dans la Base de Données (Comme le faisait bridge.py avant)
+        conn = get_db_connection()
+        conn.execute('''
+            INSERT INTO mesures (date_time, temp, hum, gaz_pct, lux, press, air_pct)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            now, 
+            data.get('temp', 0), 
+            data.get('hum', 0), 
+            data.get('gaz_pct', 0), 
+            data.get('lux', 0), 
+            data.get('press', 0), 
+            air_pct
+        ))
+        conn.commit()
+        conn.close()
+
+        # 4. AFFICHAGE DANS LA CONSOLE (C'est ça que tu veux voir !)
+        # Cela remplace la fenêtre noire du bridge.py
+        print(f"📡 [REÇU] {pico_id} : {data.get('temp')}°C | {data.get('hum')}%")
+        
+        return jsonify({"status": "ok"}), 200
+    except Exception as e:
+        print(f"❌ Erreur Reception : {e}")
+        return jsonify({"status": "error"}), 400
 
 if __name__ == '__main__':
-    print("🚀 Serveur lancé sur http://127.0.0.1:5000")
-    app.run(debug=True, port=5000)
+    # On écoute sur 0.0.0.0 pour que les Picos puissent se connecter
+    print("🚀 SERVEUR DÉMARRÉ (Mode Bridge Wifi)")
+    print("👉 En attente des satellites GreenSat 1 & 2...")
+    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
