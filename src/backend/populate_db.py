@@ -5,19 +5,33 @@ import math
 from datetime import datetime, timedelta
 
 # --- CONFIGURATION ---
-# On cible la même base de données que les autres fichiers
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'greensat.db')
 
+# Console colors
+C_RESET = "\033[0m"
+C_CYAN = "\033[96m"
+C_GREEN = "\033[92m"
+C_YELLOW = "\033[93m"
+C_PINK = "\033[95m"
+
 def populate_database():
-    print(f"🔧 Connexion à la base : {DB_PATH}")
+    # --- USER INPUTS ---
+    try:
+        years = float(input(f"{C_CYAN}Enter the amount of years to simulate: {C_RESET}"))
+        print(f"{C_YELLOW}Frequency options: [S]econds or [M]inutes?{C_RESET}")
+        freq_type = input("Choice (S/M): ").strip().upper()
+        freq_val = int(input(f"Enter interval value (every X { 'seconds' if freq_type == 'S' else 'minutes' }): "))
+    except ValueError:
+        print(f"{C_PINK}Invalid input. Using defaults: 1 year, every 60 minutes.{C_RESET}")
+        years, freq_type, freq_val = 1, 'M', 60
+
+    print(f"\n🔧 Connecting to database: {DB_PATH}")
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # 1. Nettoyage (Optionnel : on vide la table pour avoir des données propres)
-    print("🧹 Nettoyage de l'ancienne table...")
+    print("🧹 Cleaning up old table...")
     cursor.execute("DROP TABLE IF EXISTS mesures")
     
-    # 2. Re-création de la table (Structure identique à setup_db.py)
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS mesures (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,61 +46,43 @@ def populate_database():
     ''')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_date ON mesures(date_time)')
 
-    # 3. Génération des données
-    print("⏳ Génération de 2 ans d'historique... (Patientez)")
-    
+    # --- GENERATION LOGIC ---
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=730) # 2 ans
+    start_date = end_date - timedelta(days=int(365 * years))
     current_date = start_date
     
-    batch_data = [] # On stocke tout ici pour insérer en un coup (beaucoup plus rapide)
+    # Define the time jump based on user input
+    delta = timedelta(seconds=freq_val) if freq_type == 'S' else timedelta(minutes=freq_val)
     
-    # Variables pour la simulation "Météo"
+    batch_data = []
     base_press = 1013.0
-    season_offset = 0
+
+    print(f"⏳ Generating {years} years of history... (Please wait)")
 
     while current_date <= end_date:
-        # A. Gestion du Temps
-        # Jour de l'année (0-365) pour simuler les saisons
         day_of_year = current_date.timetuple().tm_yday
         hour = current_date.hour + current_date.minute / 60.0
         
-        # B. SAISONS (Sinusoïde annuelle : Froid en Hiver, Chaud en Été)
-        # Le pic de chaleur est vers le jour 200 (Juillet)
+        # Seasonal/Daily simulation logic
         season_temp = -math.cos((day_of_year - 20) / 365 * 2 * math.pi) * 10 
-        
-        # C. CYCLE JOUR/NUIT (Sinusoïde journalière)
-        # Min à 4h du matin, Max à 16h
         daily_temp = -math.cos(((hour - 4) / 24) * 2 * math.pi) * 5
-        
-        # Température Finale = Base 15°C + Saison + Jour + Aléatoire
         temp = 15 + season_temp + daily_temp + random.uniform(-2, 2)
         
-        # D. LUMIÈRE (Lux)
-        if 6 <= hour <= 21: # Soleil levé
+        # Light logic
+        if 6 <= hour <= 21:
             sun_angle = math.sin(((hour - 6) / 15) * math.pi)
-            lux = 1000 * sun_angle + random.uniform(-100, 100)
-            lux = max(0, lux) # Pas de lumière négative
-            # Moins de lumière en hiver
+            lux = max(0, 1000 * sun_angle + random.uniform(-100, 100))
             if season_temp < 0: lux *= 0.6 
         else:
-            lux = 0 # Nuit
+            lux = 0
             
-        # E. HUMIDITÉ (Inverse de la température souvent)
-        hum = 60 - (daily_temp * 2) + random.uniform(-10, 10)
-        hum = max(20, min(100, hum))
+        hum = max(20, min(100, 60 - (daily_temp * 2) + random.uniform(-10, 10)))
+        base_press = max(980, min(1040, base_press + random.uniform(-0.5, 0.5)))
         
-        # F. PRESSION (Varie lentement jour après jour)
-        base_press += random.uniform(-0.5, 0.5)
-        base_press = max(980, min(1040, base_press))
-        
-        # G. GAZ & AIR
         gaz_pct = random.uniform(2, 8)
-        # Pics de pollution aléatoires (1 chance sur 100)
-        if random.random() > 0.99: gaz_pct += random.uniform(10, 25)
+        if random.random() > 0.995: gaz_pct += random.uniform(10, 25)
         air_pct = round(100 - gaz_pct, 1)
 
-        # Ajout à la liste
         batch_data.append((
             current_date.strftime("%Y-%m-%d %H:%M:%S"),
             round(temp, 1),
@@ -97,11 +93,10 @@ def populate_database():
             air_pct
         ))
         
-        # On avance d'une heure (Pour 2 ans, 1 point/heure suffit largement et fait ~17k lignes)
-        current_date += timedelta(hours=1)
+        current_date += delta
 
-    # 4. Insertion massive (Bulk Insert)
-    print(f"💾 Sauvegarde de {len(batch_data)} enregistrements dans la base...")
+    # --- BULK INSERT ---
+    print(f"💾 Saving {len(batch_data)} records to the database...")
     cursor.executemany('''
         INSERT INTO mesures (date_time, temp, hum, gaz_pct, lux, press, air_pct)
         VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -109,7 +104,7 @@ def populate_database():
     
     conn.commit()
     conn.close()
-    print("✅ Terminé ! La base de données contient maintenant 2 ans d'historique.")
+    print(f"{C_GREEN}✅ Done! Database populated successfully.{C_RESET}")
 
 if __name__ == '__main__':
     populate_database()
