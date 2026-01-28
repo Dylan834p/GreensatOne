@@ -172,9 +172,11 @@
                     <div class="txt-value-lg" id="val-pres">0000</div>
                     <span class="txt-mono text-sm opacity-50" style="color: var(--c-text-muted);">hPa</span>
                 </div>
-                <div class="glass-panel flex-1 overflow-hidden flex flex-col">
-                    <div class="txt-label mb-2">SYSTEM LOG</div>
-                    <div id="console-output" class="overflow-y-auto h-full text-xs font-mono scrollbar-hide" style="color: var(--c-text-muted);"></div>
+                <div class="glass-panel flex-1 flex flex-col" style="max-height: 180px; overflow: hidden;">
+                    <div class="txt-label mb-2" style="font-size: 0.7rem; letter-spacing: 0.1rem;">SYSTEM LOG</div>
+                    <div id="console-output" class="overflow-y-auto pr-2 flex-1 scrollbar-hide font-mono" 
+                        style="scrollbar-width: none; -ms-overflow-style: none;">
+                        </div>
                 </div>
             </div>
         </div>

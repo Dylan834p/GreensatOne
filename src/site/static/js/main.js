@@ -38,10 +38,14 @@ function logSystem(msg) {
     const time = new Date().toLocaleTimeString('fr-FR');
     const div = document.createElement('div');
     div.className = 'log-entry new';
-    div.innerHTML = `<span style="opacity:0.5">[${time}]</span> ${msg}`;
+    div.style.padding = "2px 0";
+    div.innerHTML = `<span style="opacity:0.5; font-size: 0.7rem;">[${time}]</span> <span style="font-size: 0.75rem;">${msg}</span>`;
+    
     consoleOut.prepend(div);
-    setTimeout(() => div.classList.remove('new'), 2000);
-    if(consoleOut.children.length > 50) consoleOut.lastChild.remove();
+    
+    while (consoleOut.children.length > 15) {
+        consoleOut.lastChild.remove();
+    }
 }
 
 /* --- 3. AUDIO MANAGER --- */
@@ -343,8 +347,10 @@ async function initLimits() {
     } catch(e) {}
 }
 
-function formatDateTimeISO(d) { return d.toISOString().replace('T', ' ').split('.')[0]; }
-
+function formatDateTimeISO(d) {
+    const pad = (n) => n.toString().padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
 function getDateRange() {
     let start = new Date(currentReferenceDate);
     let end = new Date(currentReferenceDate);
@@ -436,28 +442,39 @@ async function loadHistoryData() {
         chartHistory = { labels: [], temp: [], hum: [], gas: [], press: [], lux: [] };
         
         data.forEach(d => {
-            let label = "";
-            const dateObj = new Date(d.date_time);
-            
-            if (viewMode === 'day') label = d.date_time.split(' ')[1].substring(0, 5); 
-            else if (viewMode === 'week') label = `${dateObj.getDate()}/${dateObj.getMonth()+1} ${dateObj.getHours()}h`;
-            else if (viewMode === 'month') label = `${dateObj.getDate()}/${dateObj.getMonth()+1}`;
-            else if (viewMode === 'year') label = `${dateObj.getMonth()+1}/${dateObj.getFullYear()}`;
+            if (!d) return;
+
+            let label = "---";
+            const rawDate = d.date_time || d.time_label || "";
+
+            if (rawDate) {
+                const dtStr = String(rawDate);
+                if (viewMode === 'day') {
+                    const timeMatch = dtStr.match(/(\d{2}:\d{2})/);
+                    label = timeMatch ? timeMatch[1] : dtStr;
+                } else {
+                    const dateObj = new Date(dtStr);
+                    if (!isNaN(dateObj)) {
+                        if (viewMode === 'week') label = `${dateObj.getDate()}/${dateObj.getMonth()+1} ${dateObj.getHours()}h`;
+                        else if (viewMode === 'month') label = `${dateObj.getDate()}/${dateObj.getMonth()+1}`;
+                        else if (viewMode === 'year') label = `${dateObj.getMonth()+1}/${dateObj.getFullYear()}`;
+                    }
+                }
+            }
 
             chartHistory.labels.push(label);
-            chartHistory.temp.push(d.temp);
-            chartHistory.hum.push(d.hum);
-            chartHistory.gas.push(d.gaz_pct);
-            chartHistory.press.push(d.press);
-            chartHistory.lux.push(d.lux);
+            chartHistory.temp.push(d.temp ?? 0);
+            chartHistory.hum.push(d.hum ?? 0);
+            chartHistory.gas.push(d.gaz_pct ?? d.gas ?? 0);
+            chartHistory.press.push(d.press ?? 0);
+            chartHistory.lux.push(d.lux ?? 0);
         });
         
         updateChartData();
-        logSystem("Chart Data Loaded: " + viewMode);
+        logSystem(`DATA SYNC: ${data.length} PTS`);
         
     } catch(e) { 
         console.error("History Error", e);
-        logSystem("Error loading chart data.");
     }
 }
 
