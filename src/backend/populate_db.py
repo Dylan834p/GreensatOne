@@ -4,107 +4,112 @@ import random
 import math
 from datetime import datetime, timedelta
 
-# --- CONFIGURATION ---
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'greensat.db')
 
-# Console colors
-C_RESET = "\033[0m"
-C_CYAN = "\033[96m"
-C_GREEN = "\033[92m"
-C_YELLOW = "\033[93m"
-C_PINK = "\033[95m"
+def get_sim_val(current_date):
+    """Generates a realistic set of sensor data for a specific point in time."""
+    day_of_year = current_date.timetuple().tm_yday
+    hour = current_date.hour + current_date.minute / 60.0
+    
+    # Temperature: Seasonal + Daily oscillation
+    season_temp = -math.cos((day_of_year - 20) / 365 * 2 * math.pi) * 10 
+    daily_temp = -math.cos(((hour - 4) / 24) * 2 * math.pi) * 5
+    temp = 15 + season_temp + daily_temp + random.uniform(-1, 1)
+    
+    # Lux: Sun angle logic
+    if 6 <= hour <= 21:
+        sun_angle = math.sin(((hour - 6) / 15) * math.pi)
+        lux = max(0, 1000 * sun_angle + random.uniform(-50, 50))
+    else:
+        lux = 0
+        
+    hum = max(20, min(100, 60 - (daily_temp * 2) + random.uniform(-5, 5)))
+    press = 1013.0 + random.uniform(-5, 5)
+    gaz = random.uniform(2, 5) + (random.uniform(10, 20) if random.random() > 0.99 else 0)
+    air = 100 - gaz
+    
+    return temp, hum, lux, gaz, press, air
 
-def populate_database():
-    # --- USER INPUTS ---
-    try:
-        years = float(input(f"{C_CYAN}Enter the amount of years to simulate: {C_RESET}"))
-        print(f"{C_YELLOW}Frequency options: [S]econds or [M]inutes?{C_RESET}")
-        freq_type = input("Choice (S/M): ").strip().upper()
-        freq_val = int(input(f"Enter interval value (every X { 'seconds' if freq_type == 'S' else 'minutes' }): "))
-    except ValueError:
-        print(f"{C_PINK}Invalid input. Using defaults: 1 year, every 60 minutes.{C_RESET}")
-        years, freq_type, freq_val = 1, 'M', 60
-
-    print(f"\n🔧 Connecting to database: {DB_PATH}")
+def populate_tiered_db(years=5):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    print("🧹 Cleaning up old table...")
-    cursor.execute("DROP TABLE IF EXISTS mesures")
-    
-    cursor.execute('''
-    CREATE TABLE IF NOT EXISTS mesures (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        date_time DATETIME,
-        temp REAL,
-        hum REAL,
-        gaz_pct REAL,
-        lux REAL,
-        press REAL,
-        air_pct REAL
+    # Define columns for history tables
+    cols = (
+        "temp_min, temp_max, temp_avg, hum_min, hum_max, hum_avg, "
+        "lux_min, lux_max, lux_avg, gaz_min, gaz_max, gaz_avg, "
+        "press_min, press_max, press_avg, air_min, air_max, air_avg, sample_count"
     )
-    ''')
-    cursor.execute('CREATE INDEX IF NOT EXISTS idx_date ON mesures(date_time)')
 
-    # --- GENERATION LOGIC ---
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=int(365 * years))
-    current_date = start_date
+    # Reset tables
+    cursor.execute("DROP TABLE IF EXISTS mesures")
+    cursor.execute("DROP TABLE IF EXISTS hourly_history")
+    cursor.execute("DROP TABLE IF EXISTS daily_history")
     
-    # Define the time jump based on user input
-    delta = timedelta(seconds=freq_val) if freq_type == 'S' else timedelta(minutes=freq_val)
+    cursor.execute(f"CREATE TABLE hourly_history (time_label TEXT PRIMARY KEY, {cols})")
+    cursor.execute(f"CREATE TABLE daily_history (time_label TEXT PRIMARY KEY, {cols})")
+    cursor.execute('''CREATE TABLE mesures (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, date_time TEXT, 
+        temp REAL, hum REAL, lux REAL, gaz_pct REAL, press REAL, air_pct REAL
+    )''')
+
+    now = datetime.now()
     
-    batch_data = []
-    base_press = 1013.0
-
-    print(f"⏳ Generating {years} years of history... (Please wait)")
-
-    while current_date <= end_date:
-        day_of_year = current_date.timetuple().tm_yday
-        hour = current_date.hour + current_date.minute / 60.0
-        
-        # Seasonal/Daily simulation logic
-        season_temp = -math.cos((day_of_year - 20) / 365 * 2 * math.pi) * 10 
-        daily_temp = -math.cos(((hour - 4) / 24) * 2 * math.pi) * 5
-        temp = 15 + season_temp + daily_temp + random.uniform(-2, 2)
-        
-        # Light logic
-        if 6 <= hour <= 21:
-            sun_angle = math.sin(((hour - 6) / 15) * math.pi)
-            lux = max(0, 1000 * sun_angle + random.uniform(-100, 100))
-            if season_temp < 0: lux *= 0.6 
-        else:
-            lux = 0
-            
-        hum = max(20, min(100, 60 - (daily_temp * 2) + random.uniform(-10, 10)))
-        base_press = max(980, min(1040, base_press + random.uniform(-0.5, 0.5)))
-        
-        gaz_pct = random.uniform(2, 8)
-        if random.random() > 0.995: gaz_pct += random.uniform(10, 25)
-        air_pct = round(100 - gaz_pct, 1)
-
-        batch_data.append((
-            current_date.strftime("%Y-%m-%d %H:%M:%S"),
-            round(temp, 1),
-            int(hum),
-            round(gaz_pct, 2),
-            int(lux),
-            round(base_press, 1),
-            air_pct
-        ))
-        
-        current_date += delta
-
-    # --- BULK INSERT ---
-    print(f"💾 Saving {len(batch_data)} records to the database...")
-    cursor.executemany('''
-        INSERT INTO mesures (date_time, temp, hum, gaz_pct, lux, press, air_pct)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', batch_data)
+    # 1. GENERATE DAILY HISTORY (Years 1 to 10)
+    print(f"⏳ Generating {years} years of Daily history...")
+    daily_data = []
+    for d in range(int(365 * years)):
+        date = now - timedelta(days=d)
+        # Simplified: Daily stats based on 4 samples (dawn, noon, dusk, night)
+        samples = [get_sim_val(date.replace(hour=h)) for h in [4, 12, 18, 0]]
+        row = [date.strftime("%Y-%m-%d")]
+        for i in range(6): # For each of the 6 sensors
+            vals = [s[i] for s in samples]
+            row.extend([round(min(vals), 2), round(max(vals), 2), round(sum(vals)/4, 2)])
+        row.append(1440) # Sample count
+        daily_data.append(tuple(row))
     
+    cursor.executemany(f"INSERT INTO daily_history VALUES ({','.join(['?']*20)})", daily_data)
+
+    # 2. GENERATE HOURLY HISTORY (Last 30 Days)
+    print("⏳ Generating 30 days of Hourly history...")
+    hourly_data = []
+    for h in range(24 * 30):
+        date = now - timedelta(hours=h)
+        # Simplified: 2 samples per hour
+        samples = [get_sim_val(date), get_sim_val(date - timedelta(minutes=30))]
+        row = [date.strftime("%Y-%m-%d %H:00:00")]
+        for i in range(6):
+            vals = [s[i] for s in samples]
+            row.extend([round(min(vals), 2), round(max(vals), 2), round(sum(vals)/2, 2)])
+        row.append(60)
+        hourly_data.append(tuple(row))
+
+    cursor.executemany(f"INSERT INTO hourly_history VALUES ({','.join(['?']*20)})", hourly_data)
+
+    # 3. GENERATE RAW DATA (Last 24 Hours)
+    print("⏳ Generating 24 hours of Raw 1-min data...")
+    raw_data = []
+    for m in range(1440):
+        date = now - timedelta(minutes=m)
+        t, h, l, g, p, a = get_sim_val(date)
+        raw_data.append((date.strftime("%Y-%m-%d %H:%M:%S"), 
+                         round(t, 2), int(h), int(l), round(g, 2), round(p, 1), round(a, 1)))
+
+    cursor.executemany("INSERT INTO mesures (date_time, temp, hum, lux, gaz_pct, press, air_pct) VALUES (?,?,?,?,?,?,?)", raw_data)
+
     conn.commit()
     conn.close()
-    print(f"{C_GREEN}✅ Done! Database populated successfully.{C_RESET}")
+    print(f"✅ Database populated: {years}y Daily, 30d Hourly, 24h Raw.")
 
-if __name__ == '__main__':
-    populate_database()
+if __name__ == "__main__":
+    try:
+        user_input = input("Enter number of years to simulate (e.g., 0.5, 2, 10): ").strip()
+        years_to_gen = float(user_input) if user_input else 1.0
+        if years_to_gen <= 0:
+            raise ValueError
+    except ValueError:
+        print("Invalid input. Defaulting to 1 year.")
+        years_to_gen = 1.0
+
+    populate_tiered_db(years_to_gen)
