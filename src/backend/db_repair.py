@@ -11,7 +11,7 @@ HOURLY_COLS = (
     "temp_min, temp_max, temp_avg, "
     "hum_min, hum_max, hum_avg, "
     "lux_min, lux_max, lux_avg, "
-    "gaz_min, gaz_max, gaz_avg, "
+    "gas_min, gas_max, gas_avg, "
     "press_min, press_max, press_avg, "
     "air_min, air_max, air_avg, "
     "sample_count"
@@ -32,7 +32,7 @@ def ensure_schema(conn: sqlite3.Connection):
         temp REAL, 
         hum REAL, 
         lux REAL, 
-        gaz_pct REAL, 
+        gas_pct REAL, 
         press REAL, 
         air_pct REAL
     )''')
@@ -63,7 +63,7 @@ def repair_hourly(conn: sqlite3.Connection) -> int:
           temp_min, temp_max, temp_avg,
           hum_min, hum_max, hum_avg,
           lux_min, lux_max, lux_avg,
-          gaz_min, gaz_max, gaz_avg,
+          gas_min, gas_max, gas_avg,
           press_min, press_max, press_avg,
           air_min, air_max, air_avg,
           sample_count
@@ -73,7 +73,7 @@ def repair_hourly(conn: sqlite3.Connection) -> int:
           MIN(temp), MAX(temp), AVG(temp),
           MIN(hum),  MAX(hum),  AVG(hum),
           MIN(lux),  MAX(lux),  AVG(lux),
-          MIN(gaz_pct), MAX(gaz_pct), AVG(gaz_pct),
+          MIN(gas_pct), MAX(gas_pct), AVG(gas_pct),
           MIN(press), MAX(press), AVG(press),
           MIN(air_pct), MAX(air_pct), AVG(air_pct),
           COUNT(*)
@@ -107,7 +107,7 @@ def repair_daily(conn: sqlite3.Connection) -> int:
           temp_min, temp_max, temp_avg,
           hum_min, hum_max, hum_avg,
           lux_min, lux_max, lux_avg,
-          gaz_min, gaz_max, gaz_avg,
+          gas_min, gas_max, gas_avg,
           press_min, press_max, press_avg,
           air_min, air_max, air_avg,
           sample_count
@@ -117,7 +117,7 @@ def repair_daily(conn: sqlite3.Connection) -> int:
           MIN(temp_min), MAX(temp_max), AVG(temp_avg),
           MIN(hum_min),  MAX(hum_max),  AVG(hum_avg),
           MIN(lux_min),  MAX(lux_max),  AVG(lux_avg),
-          MIN(gaz_min),  MAX(gaz_max),  AVG(gaz_avg),
+          MIN(gas_min),  MAX(gas_max),  AVG(gas_avg),
           MIN(press_min), MAX(press_max), AVG(press_avg),
           MIN(air_min),  MAX(air_max),  AVG(air_avg),
           SUM(sample_count)

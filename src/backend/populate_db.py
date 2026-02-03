@@ -25,10 +25,10 @@ def get_sim_val(current_date):
         
     hum = max(20, min(100, 60 - (daily_temp * 2) + random.uniform(-5, 5)))
     press = 1013.0 + random.uniform(-5, 5)
-    gaz = random.uniform(2, 5) + (random.uniform(10, 20) if random.random() > 0.99 else 0)
-    air = 100 - gaz
+    gas = random.uniform(2, 5) + (random.uniform(10, 20) if random.random() > 0.99 else 0)
+    air = 100 - gas
     
-    return temp, hum, lux, gaz, press, air
+    return temp, hum, lux, gas, press, air
 
 def populate_tiered_db(years=5):
     conn = sqlite3.connect(DB_PATH)
@@ -37,7 +37,7 @@ def populate_tiered_db(years=5):
     # Define columns for history tables
     cols = (
         "temp_min, temp_max, temp_avg, hum_min, hum_max, hum_avg, "
-        "lux_min, lux_max, lux_avg, gaz_min, gaz_max, gaz_avg, "
+        "lux_min, lux_max, lux_avg, gas_min, gas_max, gas_avg, "
         "press_min, press_max, press_avg, air_min, air_max, air_avg, sample_count"
     )
 
@@ -50,7 +50,7 @@ def populate_tiered_db(years=5):
     cursor.execute(f"CREATE TABLE daily_history (time_label TEXT PRIMARY KEY, {cols})")
     cursor.execute('''CREATE TABLE mesures (
         id INTEGER PRIMARY KEY AUTOINCREMENT, date_time TEXT, 
-        temp REAL, hum REAL, lux REAL, gaz_pct REAL, press REAL, air_pct REAL
+        temp REAL, hum REAL, lux REAL, gas_pct REAL, press REAL, air_pct REAL
     )''')
 
     now = datetime.now()
@@ -96,7 +96,7 @@ def populate_tiered_db(years=5):
         raw_data.append((date.strftime("%Y-%m-%d %H:%M:%S"), 
                          round(t, 2), int(h), int(l), round(g, 2), round(p, 1), round(a, 1)))
 
-    cursor.executemany("INSERT INTO mesures (date_time, temp, hum, lux, gaz_pct, press, air_pct) VALUES (?,?,?,?,?,?,?)", raw_data)
+    cursor.executemany("INSERT INTO mesures (date_time, temp, hum, lux, gas_pct, press, air_pct) VALUES (?,?,?,?,?,?,?)", raw_data)
 
     conn.commit()
     conn.close()
