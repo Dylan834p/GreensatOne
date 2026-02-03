@@ -280,8 +280,7 @@ if __name__ == "__main__":
 
                 # Save Data
                 if insert_raw(conn, data, now):
-                    print(f"{C_GREEN}📥 [{now.strftime('%H:%M:%S')}] Telemetry Stored: "
-                          f"{data.get('temp_c', 0)}°C, {data.get('pressure_hpa', 0)} hPa{C_RESET}")
+                    print(f"{C_GREEN}📥 [{now.strftime('%H:%M:%S')}] Telemetry Stored")
 
                 # Aggregation & Rollover
                 current_hour_start = floor_to_hour(now)
