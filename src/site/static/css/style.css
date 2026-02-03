@@ -70,35 +70,7 @@ body {
 ::-webkit-scrollbar-track { background: var(--c-bg); }
 ::-webkit-scrollbar-thumb { background: var(--c-border); border-radius: 3px; }
 
-/* --- FILM GRAIN --- */
-#noise-canvas, #fluid-canvas {
-    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-    pointer-events: none;
-}
 #fluid-canvas { z-index: -1; }
-
-#noise-canvas { 
-    z-index: 9001;
-    opacity: 0.04;
-    animation: grain 0.5s steps(5) infinite;
-    mix-blend-mode: overlay; 
-}
-
-/* En Light Mode, le grain doit être plus sombre pour se voir */
-body.light-mode #noise-canvas { mix-blend-mode: multiply; opacity: 0.03; }
-
-@keyframes grain {
-    0%, 100% { transform: translate(0, 0); }
-    10% { transform: translate(-5%, -5%); }
-    20% { transform: translate(-10%, 5%); }
-    30% { transform: translate(5%, -10%); }
-    40% { transform: translate(-5%, 15%); }
-    50% { transform: translate(-10%, 5%); }
-    60% { transform: translate(15%, 0); }
-    70% { transform: translate(0, 10%); }
-    80% { transform: translate(-15%, 0); }
-    90% { transform: translate(10%, 5%); }
-}
 
 /* --- CRT SCANLINE --- */
 .scanlines {
@@ -115,8 +87,8 @@ body.light-mode .scanlines { opacity: 0.05; }
 /* --- TILT 3D CARDS --- */
 .glass {
     background: var(--c-surface);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(5px);
+    -webkit-backdrop-filter: blur(5px);
     border: 1px solid var(--c-border);
     position: relative;
     border-radius: 24px;

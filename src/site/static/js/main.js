@@ -166,7 +166,7 @@ document.querySelectorAll('.tilt-card').forEach(card => {
     });
 });
 
-/* --- 6. 3D BACKGROUND (IMPROVED CINEMATIC) --- */
+/* --- 6. 3D BACKGROUND (OPTIMISÉ) --- */
 function init3DScene() {
     const canvas = document.querySelector('#scene-3d');
     if (!canvas) return;
@@ -175,40 +175,49 @@ function init3DScene() {
     scene.fog = new THREE.FogExp2(0x1c2e4a, 0.02); 
 
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-    camera.position.z = 8; // Reculé pour le gros modèle
+    camera.position.z = 8;
     camera.position.y = 0; 
     
-    const renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true, powerPreference: "high-performance" });
+    // OPTIMISATION : powerPreference à "default" pour économiser la batterie sur mobile si nécessaire
+    const renderer = new THREE.WebGLRenderer({ 
+        canvas: canvas, 
+        alpha: true, 
+        antialias: true, // Peut être passé à false si encore trop lent
+        powerPreference: "high-performance" 
+    });
     renderer.setSize(window.innerWidth, window.innerHeight);
+    // OPTIMISATION : Bloquer le pixel ratio à 1.5 max pour éviter de tuer les écrans Retina/4K
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
 
-    // LUMIÈRES CINÉMATIQUES
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-    scene.add(ambientLight);
+    // --- LUMIÈRES OPTIMISÉES ---
+    // Remplacement de AmbientLight + SpotLight par une seule HemisphereLight
+    // Coût GPU très faible, simule bien l'ambiance globale
+    const hemiLight = new THREE.HemisphereLight(0xddeeff, 0x0f172a, 2.0); // Ciel bleuté / Sol sombre
+    scene.add(hemiLight);
     
-    const sunLight = new THREE.DirectionalLight(0xffdcb4, 2.5); // Soleil fort
+    const sunLight = new THREE.DirectionalLight(0xffdcb4, 2.0); 
     sunLight.position.set(15, 10, 10);
     scene.add(sunLight);
     
-    // Contre-jour (Rim Light) pour détacher le satellite du fond
-    const rimLight = new THREE.SpotLight(0x38bdf8, 5);
-    rimLight.position.set(-10, 5, -5);
-    rimLight.lookAt(0,0,0);
-    scene.add(rimLight);
+    // SUPPRESSION DE LA SPOTLIGHT (RIM LIGHT) COÛTEUSE
+    // L'effet de "contre-jour" est moins prononcé mais le gain FPS est significatif.
 
-    // --- NUAGES ---
+    // --- NUAGES OPTIMISÉS ---
     const clouds = [];
-    const cloudGeo = new THREE.DodecahedronGeometry(1, 0); 
+    // OPTIMISATION GEOMETRIE : Octahedron (8 faces) au lieu de Dodecahedron (12 faces)
+    const cloudGeo = new THREE.OctahedronGeometry(1, 0); 
     const cloudMat = new THREE.MeshLambertMaterial({ 
         color: 0xffffff, 
         transparent: true, 
         opacity: 0.25, 
-        flatShading: true 
+        flatShading: true,
+        side: THREE.FrontSide // Force le rendu d'une seule face pour éviter des calculs internes inutiles
     });
 
     function createCloud(x, y, z, scale) {
         const cloudGroup = new THREE.Group();
-        for(let i=0; i<5; i++) {
+        // Réduction légère du nombre de sous-éléments par nuage (3 au lieu de 5)
+        for(let i=0; i<3; i++) {
             const mesh = new THREE.Mesh(cloudGeo, cloudMat);
             mesh.position.set(Math.random()*1.8 - 0.9, Math.random()*0.6, Math.random()*1.2 - 0.6);
             mesh.scale.set(1 + Math.random(), 1 + Math.random(), 1 + Math.random());
@@ -227,44 +236,48 @@ function init3DScene() {
     createCloud(-7, -4, -6, 0.7);
     createCloud(5, 5, -10, 2.0);
 
-    // --- SATELLITE (AGRANDI & DÉPLACÉ) ---
+    // --- SATELLITE ---
     let model;
     new GLTFLoader().load('/static/models/satellite.glb', (gltf) => {
         model = gltf.scene;
-        // ÉCHELLE AUGMENTÉE (x2.8)
         model.scale.set(2.8, 2.8, 2.8); 
-        
-        // Centrage
         new THREE.Box3().setFromObject(model).getCenter(model.position).multiplyScalar(-1);
-        
-        // Placement stratégique (Plus bas pour ne pas gêner le titre)
         model.position.y -= 0.5;
-        
-        // Angle héroïque
         model.rotation.x = 0.2; 
         model.rotation.z = 0.1;
         
+        // Optimisation Matériaux du modèle importé
+        model.traverse((o) => {
+            if (o.isMesh) {
+                // Désactiver les calculs d'ombres inutiles si on ne les utilise pas
+                o.castShadow = false;
+                o.receiveShadow = false;
+            }
+        });
+
         scene.add(model);
     });
 
     function animate() {
+        // Arrêt du rendu si l'onglet n'est pas actif (Gain CPU majeur)
         if (document.hidden) {
-        setTimeout(() => requestAnimationFrame(animate), 500); 
-        return;
-    }
+            setTimeout(() => requestAnimationFrame(animate), 500); 
+            return;
+        }
     
         requestAnimationFrame(animate);
-        // Animation Satellite (Dérive complexe/flottement)
+        
         if (model) {
-            model.rotation.y += 0.0015; // Rotation
-            model.rotation.x = Math.sin(Date.now() * 0.0003) * 0.15; // Balancement
-            model.position.y = (Math.sin(Date.now() * 0.0005) * 0.3) - 0.5; // Levitation
+            model.rotation.y += 0.0015; 
+            model.rotation.x = Math.sin(Date.now() * 0.0003) * 0.15; 
+            model.position.y = (Math.sin(Date.now() * 0.0005) * 0.3) - 0.5; 
         }
-        // Animation Nuages
+        
         clouds.forEach(c => {
             c.mesh.position.x += c.speed;
             if(c.mesh.position.x > 12) c.mesh.position.x = -12;
         });
+        
         renderer.render(scene, camera);
     }
     animate();
