@@ -4,7 +4,6 @@ from flask import Flask, render_template, jsonify, request
 
 app = Flask(__name__)
 
-# Absolute pathing for your structure: /src/site/app.py -> /src/backend/greensat.db
 SITE_DIR = os.path.dirname(os.path.abspath(__file__))
 BASE_DIR = os.path.dirname(SITE_DIR)
 DB_PATH = os.path.join(BASE_DIR, 'backend', 'greensat.db')
@@ -45,7 +44,7 @@ def api_history():
     mapping = """
         time_label AS date_time, 
         temp_avg AS temp, hum_avg AS hum, lux_avg AS lux, 
-        gaz_avg AS gaz_pct, press_avg AS press, air_avg AS air_pct
+        gas_avg AS gas_pct, press_avg AS press, air_avg AS air_pct
     """
 
     try:

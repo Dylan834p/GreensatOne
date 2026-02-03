@@ -465,7 +465,7 @@ async function loadHistoryData() {
             chartHistory.labels.push(label);
             chartHistory.temp.push(d.temp ?? 0);
             chartHistory.hum.push(d.hum ?? 0);
-            chartHistory.gas.push(d.gaz_pct ?? d.gas ?? 0);
+            chartHistory.gas.push(d.gas_pct ?? d.gas ?? 0);
             chartHistory.press.push(d.press ?? 0);
             chartHistory.lux.push(d.lux ?? 0);
         });
@@ -546,14 +546,14 @@ async function fetchData() {
 
         updateText('val-temp', data.temp, '°C');
         updateText('val-hum', data.hum, '%');
-        updateText('val-gas', data.gaz_pct, '%');
+        updateText('val-gas', data.gas_pct, '%');
         updateText('val-lux', data.lux, 'Lx');
         updateText('val-pres', data.press, '');
-        let aqi = data.air_pct || Math.round(data.gaz_pct * 1.5);
+        let aqi = data.air_pct || Math.round(data.gas_pct * 1.5);
         updateText('aqi-score', aqi, '');
         updateBar('bar-temp', data.temp, 50);
         updateBar('bar-hum', data.hum, 100);
-        updateBar('bar-gas', data.gaz_pct, 100);
+        updateBar('bar-gas', data.gas_pct, 100);
         updateBar('bar-lux', data.lux, 1000); 
 
         const statusText = document.getElementById('main-status-text');
@@ -564,7 +564,7 @@ async function fetchData() {
         
         if (connStatus) { connStatus.innerText = "CONNECTED"; connStatus.style.color = "var(--c-accent-success)"; }
 
-        if (data.gaz_pct > 20) {
+        if (data.gas_pct > 20) {
             orbState = 'danger';
             if(statusText) { statusText.innerText = "CRITICAL"; statusText.style.background = "var(--c-accent-danger)"; }
             if(globalDot) globalDot.style.background = "var(--c-accent-danger)";
@@ -586,7 +586,7 @@ async function fetchData() {
                 chartHistory.labels.push(timeLabel);
                 chartHistory.temp.push(data.temp);
                 chartHistory.hum.push(data.hum);
-                chartHistory.gas.push(data.gaz_pct);
+                chartHistory.gas.push(data.gas_pct);
                 chartHistory.press.push(data.press);
                 chartHistory.lux.push(data.lux);
                 

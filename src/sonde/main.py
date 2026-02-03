@@ -42,6 +42,7 @@ while True:
     try:
         # 1. Data Acquisition
         raw_gas, gas_pct = gas_sensor.read()
+        print(raw_gas, gas_pct)
         temp, hum = dht_sensor.read()
         lux = lux_sensor.read()
         pressure = bmp_sensor.read()
@@ -70,4 +71,4 @@ while True:
         # Log error to stderr if supported, or print clear error message
         print(json.dumps({"error": str(e)}))
 
-    time.sleep(5)
+    time.sleep(2)

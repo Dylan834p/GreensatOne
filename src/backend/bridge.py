@@ -39,7 +39,7 @@ HOURLY_COLS = (
     "temp_min, temp_max, temp_avg, "
     "hum_min, hum_max, hum_avg, "
     "lux_min, lux_max, lux_avg, "
-    "gaz_min, gaz_max, gaz_avg, "
+    "gas_min, gas_max, gas_avg, "
     "press_min, press_max, press_avg, "
     "air_min, air_max, air_avg, "
     "sample_count"
@@ -59,7 +59,7 @@ def ensure_schema(conn: sqlite3.Connection):
         temp REAL, 
         hum REAL, 
         lux REAL, 
-        gaz_pct REAL, 
+        gas_pct REAL, 
         press REAL, 
         air_pct REAL
     )''')
@@ -93,20 +93,20 @@ def insert_raw(conn: sqlite3.Connection, data: dict, now: datetime) -> bool:
         
         temp = data.get("temp_c", data.get("temp", 0))
         hum  = data.get("humidity", data.get("hum", 0))
-        gaz  = data.get("gaz_pct", 0)
+        gas  = data.get("gas_pct", 0)
         lux  = data.get("lux", 0)
         pres = data.get("pressure_hpa", data.get("press", 0))
         
-        air_pct = round(100.0 - float(gaz), 1)
+        air_pct = round(100.0 - float(gas), 1)
 
         cur.execute("""
-            INSERT INTO mesures (date_time, temp, hum, gaz_pct, lux, press, air_pct)
+            INSERT INTO mesures (date_time, temp, hum, gas_pct, lux, press, air_pct)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
             fmt(now),
             temp,
             hum,
-            gaz,
+            gas,
             lux,
             pres,
             air_pct
@@ -129,7 +129,7 @@ def aggregate_hour(conn: sqlite3.Connection, start: datetime, end: datetime):
           temp_min, temp_max, temp_avg,
           hum_min, hum_max, hum_avg,
           lux_min, lux_max, lux_avg,
-          gaz_min, gaz_max, gaz_avg,
+          gas_min, gas_max, gas_avg,
           press_min, press_max, press_avg,
           air_min, air_max, air_avg,
           sample_count
@@ -139,7 +139,7 @@ def aggregate_hour(conn: sqlite3.Connection, start: datetime, end: datetime):
           MIN(temp), MAX(temp), AVG(temp),
           MIN(hum),  MAX(hum),  AVG(hum),
           MIN(lux),  MAX(lux),  AVG(lux),
-          MIN(gaz_pct), MAX(gaz_pct), AVG(gaz_pct),
+          MIN(gas_pct), MAX(gas_pct), AVG(gas_pct),
           MIN(press), MAX(press), AVG(press),
           MIN(air_pct), MAX(air_pct), AVG(air_pct),
           COUNT(*)
@@ -162,7 +162,7 @@ def aggregate_day_from_hourly(conn: sqlite3.Connection, day_start: datetime, day
           temp_min, temp_max, temp_avg,
           hum_min, hum_max, hum_avg,
           lux_min, lux_max, lux_avg,
-          gaz_min, gaz_max, gaz_avg,
+          gas_min, gas_max, gas_avg,
           press_min, press_max, press_avg,
           air_min, air_max, air_avg,
           sample_count
@@ -172,7 +172,7 @@ def aggregate_day_from_hourly(conn: sqlite3.Connection, day_start: datetime, day
           MIN(temp_min), MAX(temp_max), AVG(temp_avg),
           MIN(hum_min),  MAX(hum_max),  AVG(hum_avg),
           MIN(lux_min),  MAX(lux_max),  AVG(lux_avg),
-          MIN(gaz_min),  MAX(gaz_max),  AVG(gaz_avg),
+          MIN(gas_min),  MAX(gas_max),  AVG(gas_avg),
           MIN(press_min), MAX(press_max), AVG(press_avg),
           MIN(air_min),  MAX(air_max),  AVG(air_avg),
           SUM(sample_count)
@@ -277,7 +277,7 @@ if __name__ == "__main__":
                     continue
 
                 now = datetime.now()
-
+                print(line)
                 # Save Data
                 if insert_raw(conn, data, now):
                     print(f"{C_GREEN}📥 [{now.strftime('%H:%M:%S')}] Telemetry Stored")

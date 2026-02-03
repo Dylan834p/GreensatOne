@@ -17,10 +17,14 @@ class GasSensor:
         self.baseline = total / 20
 
     def read(self):
-        """Returns raw ADC value and estimated gas percentage."""
         val = self.sensor.read_u16()
-        diff = max(0, val - self.baseline)
-        # Normalizing to a 0-100 percentage scale based on expected sensitivity
+        
+        # Use 'abs' temporarily to see if it's moving at all
+        diff = abs(val - self.baseline) 
+        
+        # If breathing on it makes the raw 'val' go DOWN, 
+        # you should change the logic to: diff = max(0, self.baseline - val)
+        
         percentage = min(100.0, (diff / 10000.0) * 100.0)
         return val, round(percentage, 2)
 
