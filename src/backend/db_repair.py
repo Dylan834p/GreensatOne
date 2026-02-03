@@ -26,7 +26,16 @@ def open_db():
 
 def ensure_schema(conn: sqlite3.Connection):
     cur = conn.cursor()
-
+    cur.execute('''CREATE TABLE IF NOT EXISTS mesures (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        date_time TEXT, 
+        temp REAL, 
+        hum REAL, 
+        lux REAL, 
+        gaz_pct REAL, 
+        press REAL, 
+        air_pct REAL
+    )''')
     # Ensure summary tables exist (matches your bridge structure)
     cur.execute(f"CREATE TABLE IF NOT EXISTS hourly_history (time_label TEXT PRIMARY KEY, {HOURLY_COLS})")
     cur.execute(f"CREATE TABLE IF NOT EXISTS daily_history  (time_label TEXT PRIMARY KEY, {HOURLY_COLS})")

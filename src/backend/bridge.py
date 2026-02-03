@@ -4,6 +4,7 @@ import json
 import sqlite3
 import os
 from datetime import datetime, timedelta, date
+import time
 
 # --- CONFIGURATION ---
 PORT_USB = 'COM5'
@@ -52,7 +53,16 @@ def open_db():
 
 def ensure_schema(conn: sqlite3.Connection):
     cur = conn.cursor()
-
+    cur.execute('''CREATE TABLE IF NOT EXISTS mesures (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        date_time TEXT, 
+        temp REAL, 
+        hum REAL, 
+        lux REAL, 
+        gaz_pct REAL, 
+        press REAL, 
+        air_pct REAL
+    )''')
     # Summary tables
     cur.execute(f"CREATE TABLE IF NOT EXISTS hourly_history (time_label TEXT PRIMARY KEY, {HOURLY_COLS})")
     cur.execute(f"CREATE TABLE IF NOT EXISTS daily_history  (time_label TEXT PRIMARY KEY, {HOURLY_COLS})")
@@ -80,17 +90,26 @@ def load_last_hour_start(conn: sqlite3.Connection) -> datetime:
 def insert_raw(conn: sqlite3.Connection, data: dict, now: datetime) -> bool:
     try:
         cur = conn.cursor()
+        
+        temp = data.get("temp_c", data.get("temp", 0))
+        hum  = data.get("humidity", data.get("hum", 0))
+        gaz  = data.get("gaz_pct", 0)
+        lux  = data.get("lux", 0)
+        pres = data.get("pressure_hpa", data.get("press", 0))
+        
+        air_pct = round(100.0 - float(gaz), 1)
+
         cur.execute("""
             INSERT INTO mesures (date_time, temp, hum, gaz_pct, lux, press, air_pct)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
             fmt(now),
-            data.get("temp", 0),
-            data.get("hum", 0),
-            data.get("gaz_pct", 0),
-            data.get("lux", 0),
-            data.get("press", 0),
-            data.get("air_pct", 0),
+            temp,
+            hum,
+            gaz,
+            lux,
+            pres,
+            air_pct
         ))
         conn.commit()
         return True
@@ -192,25 +211,30 @@ def clear_screen():
 
 def choose_port():
     global PORT_USB
-    ports = serial.tools.list_ports.comports()
-    if len(ports) > 1:
-        print(f"{C_RED}Multiple COM ports found:{C_RESET}")
+    while True:
+        ports = serial.tools.list_ports.comports()
+        if not ports:
+            print(f"{C_RED}{C_BOLD}No COM ports found! Retrying in 5s...{C_RESET}")
+            time.sleep(5)
+            continue
+            
+        if len(ports) == 1:
+            PORT_USB = ports[0].device
+            return
+
+        print(f"\n{C_CYAN}Multiple COM ports found:{C_RESET}")
         for i, port in enumerate(ports):
-            print(f"{i+1}: {port.device}")
-        while True:
-            try:
-                choice = int(input("Choose a COM port to use [1..N]: "))
-                if 1 <= choice <= len(ports):
-                    PORT_USB = ports[choice - 1].device
-                    break
-            except:
-                pass
-            print("Invalid selection....")
-    elif len(ports) == 1:
-        PORT_USB = ports[0].device
-    else:
-        print(f"{C_RED}{C_BOLD}No COM ports found!{C_RESET}")
-        raise SystemExit(1)
+            print(f"{i+1}: {port.device} ({port.description})")
+        
+        try:
+            choice = input(f"{C_YELLOW}Choose a port [1-{len(ports)}] (or Enter to refresh): {C_RESET}")
+            if not choice: continue
+            idx = int(choice) - 1
+            if 0 <= idx < len(ports):
+                PORT_USB = ports[idx].device
+                return
+        except ValueError:
+            print(f"{C_RED}Invalid input.{C_RESET}")
 
 # ----------------------------
 # Main loop
@@ -219,97 +243,78 @@ if __name__ == "__main__":
     clear_screen()
     choose_port()
 
-    print(f"{C_YELLOW}Starting SQL Bridge...{C_RESET}")
-
-    # Serial open
-    try:
-        ser = serial.Serial(PORT_USB, BAUDRATE, timeout=1)
-    except Exception as e:
-        print(f"{C_RED}Serial open error: {e}{C_RESET}")
-        raise SystemExit(1)
-
-    # DB open once
+    # DB open once (outside the connection loop)
     conn = open_db()
     ensure_schema(conn)
-
     last_hour_start = load_last_hour_start(conn)
     last_vacuum_day: date | None = None
 
-    print(f"{C_GREEN}Bridge running!{C_RESET}")
-    print(f"{C_CYAN}Last hour start to process: {fmt(last_hour_start)}{C_RESET}")
+    print(f"{C_GREEN}SQL Bridge Initialized.{C_RESET}")
 
-    try:
-        while True:
-            if ser.in_waiting <= 0:
-                continue
+    while True: # Outer Loop: Handles Reconnections
+        try:
+            print(f"{C_YELLOW}Connecting to {PORT_USB}...{C_RESET}")
+            ser = serial.Serial(PORT_USB, BAUDRATE, timeout=1)
+            print(f"{C_GREEN}✅ Connected! Bridge running.{C_RESET}")
 
-            line = ser.readline().decode("utf-8", errors="ignore").strip()
-            if not line.startswith("{"):
-                continue
+            while True: # Inner Loop: Handles Data Processing
+                if ser.in_waiting <= 0:
+                    time.sleep(0.1)
+                    continue
 
-            try:
-                data = json.loads(line)
-            except:
-                continue
+                line = ser.readline().decode("utf-8", errors="ignore").strip()
+                
+                if not (line.startswith("{") and line.endswith("}")):
+                    continue
 
-            if "error" in data:
-                continue
+                try:
+                    data = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
 
-            now = datetime.now()
+                if "error" in data:
+                    print(f"{C_RED}⚠️ Pico Sensor Error: {data['error']}{C_RESET}")
+                    continue
 
-            # Fill air_pct if missing
-            if "air_pct" not in data:
-                data["air_pct"] = round(100 - float(data.get("gaz_pct", 0) or 0), 1)
+                now = datetime.now()
 
-            # 1) Raw insert
-            if insert_raw(conn, data, now):
-                print(f"{C_GREEN}>> [SQL] Data saved at {fmt(now)}{C_RESET}")
+                # Save Data
+                if insert_raw(conn, data, now):
+                    print(f"{C_GREEN}📥 [{now.strftime('%H:%M:%S')}] Telemetry Stored: "
+                          f"{data.get('temp_c', 0)}°C, {data.get('pressure_hpa', 0)} hPa{C_RESET}")
 
-            # 2) Hour rollover check + catch-up
-            current_hour_start = floor_to_hour(now)
+                # Aggregation & Rollover
+                current_hour_start = floor_to_hour(now)
+                if current_hour_start > last_hour_start:
+                    while last_hour_start < current_hour_start:
+                        start = last_hour_start
+                        end = start + timedelta(hours=1)
+                        aggregate_hour(conn, start, end)
+                        if end.hour == 0:
+                            aggregate_day_from_hourly(conn, end - timedelta(days=1), end)
+                        last_hour_start = end
+                    prune_raw(conn)
 
-            if current_hour_start > last_hour_start:
-                print(f"{C_YELLOW}⏱️ Hour rollover detected. Catching up...{C_RESET}")
-
-                # Catch up hour by hour
-                while last_hour_start < current_hour_start:
-                    start = last_hour_start
-                    end = start + timedelta(hours=1)
-
-                    aggregate_hour(conn, start, end)
-                    print(f"{C_CYAN}📊 Hourly aggregated: {fmt(start)} -> {fmt(end)}{C_RESET}")
-
-                    # If end is midnight, aggregate previous day
-                    if end.hour == 0 and end.minute == 0 and end.second == 0:
-                        day_end = end
-                        day_start = day_end - timedelta(days=1)
-                        aggregate_day_from_hourly(conn, day_start, day_end)
-                        print(f"{C_CYAN}📅 Daily aggregated: {day_start.date()}{C_RESET}")
-
-                    last_hour_start = end
-
-                # 3) Prune raw once per rollover batch
-                prune_raw(conn)
-                print(f"{C_CYAN}🧹 Pruned raw data older than {RAW_RETENTION_HOURS}h{C_RESET}")
-
-            # 4) Vacuum once per day after first packet at VACUUM_HOUR
-            if now.hour == VACUUM_HOUR:
-                if last_vacuum_day != now.date():
-                    print(f"{C_YELLOW}🧹 Optimizing database (VACUUM)...{C_RESET}")
+                # Maintenance
+                if now.hour == VACUUM_HOUR and last_vacuum_day != now.date():
                     maybe_vacuum(conn)
                     last_vacuum_day = now.date()
-                    print(f"{C_GREEN}✅ Vacuum done for {last_vacuum_day}{C_RESET}")
 
-    except KeyboardInterrupt:
-        print(f"\n{C_YELLOW}Stopping bridge...{C_RESET}")
-    except Exception as e:
-        print(f"{C_RED}Error: {e}{C_RESET}")
-    finally:
-        try:
-            ser.close()
-        except:
-            pass
-        try:
-            conn.close()
-        except:
-            pass
+        except (serial.SerialException, OSError) as e:
+            print(f"{C_RED}🔌 Disconnected: {e}{C_RESET}")
+            print(f"{C_YELLOW}Retrying connection in 5 seconds...{C_RESET}")
+            try: ser.close() 
+            except: pass
+            time.sleep(5)
+            # Re-scan ports in case the COM number changed after replugging
+            choose_port() 
+
+        except KeyboardInterrupt:
+            print(f"\n{C_YELLOW}Stopping SQL Bridge...{C_RESET}")
+            break
+        except Exception as e:
+            print(f"{C_RED}💥 Unexpected Error: {e}{C_RESET}")
+            time.sleep(5)
+
+    conn.close()
+    print(f"{C_CYAN}Bridge Shutdown.{C_RESET}")

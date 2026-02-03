@@ -1,92 +1,73 @@
 import time
-from machine import Pin, I2C
-from sensors import GasSensor, TempHumSensor, LightSensor, PressureSensor, GreenSatLogger, Alarm
-import json 
+import json
+from machine import Pin, I2C # type: ignore
+from sensors import GasSensor, TempHumSensor, LightSensor, PressureSensor, Alarm
 
-# --- PINS (Inchangés) ---
+# --- Configuration: Hardware Pins ---
 PIN_DHT_POWER = 14
 PIN_DHT_DATA  = 15
 PIN_BUZZER    = 16
-PIN_GAZ       = 26
+PIN_GAS_ADC   = 26
 PIN_BMP_POWER = 4
 PIN_SDA_BMP   = 2
 PIN_SCL_BMP   = 3
 PIN_SDA_LUX   = 0
 PIN_SCL_LUX   = 1
 
-# --- ALIMENTATIONS ---
-p1 = Pin(PIN_DHT_POWER, Pin.OUT)
-p1.value(1)
-p2 = Pin(PIN_BMP_POWER, Pin.OUT)
-p2.value(1)
-time.sleep(2) # Réveil des capteurs
+# --- Initialization: Power Rails ---
+dht_power = Pin(PIN_DHT_POWER, Pin.OUT)
+bmp_power = Pin(PIN_BMP_POWER, Pin.OUT)
 
-# --- SETUP ---
+dht_power.value(1)
+bmp_power.value(1)
+time.sleep(2)  # Sensor stabilization delay
+
+# --- Initialization: Peripherals ---
 buzzer = Alarm(PIN_BUZZER)
-buzzer.beep(0.1)
-
-# I2C
 i2c_lux = I2C(0, scl=Pin(PIN_SCL_LUX), sda=Pin(PIN_SDA_LUX), freq=400000)
 i2c_pres = I2C(1, scl=Pin(PIN_SCL_BMP), sda=Pin(PIN_SDA_BMP), freq=400000)
 
-# Objets Capteurs
-mq2 = GasSensor(PIN_GAZ)
-dht11 = TempHumSensor(PIN_DHT_DATA)
+# --- Initialization: Sensor Objects ---
+gas_sensor = GasSensor(PIN_GAS_ADC)
+dht_sensor = TempHumSensor(PIN_DHT_DATA)
 lux_sensor = LightSensor(i2c_lux)
-bmp280 = PressureSensor(i2c_pres)
+bmp_sensor = PressureSensor(i2c_pres)
 
-print("💖 Calibrage des capteurs en cours... (Patience)")
-mq2.calibrer()
+# Calibration sequence
+gas_sensor.calibrate()
 
-print("\n" + "="*30)
-print("🌸  GREENSAT PICO SYSTEM  🌸")
-print("="*30 + "\n")
+print("System Initialized. Starting Telemetry...")
 
 while True:
     try:
-        # 1. LECTURES
-        raw_gaz, pct_gaz = mq2.read()
-        temp, hum = dht11.read()
+        # 1. Data Acquisition
+        raw_gas, gas_pct = gas_sensor.read()
+        temp, hum = dht_sensor.read()
         lux = lux_sensor.read()
-        press = bmp280.read()
+        pressure = bmp_sensor.read()
         
-        # 2. PRÉPARATION DES DONNÉES
-        data = {
-            "gaz_pct": round(pct_gaz, 2),
-            "temp": temp if temp is not None else 0,
-            "hum": hum if hum is not None else 0,
+        # 2. Data Normalization
+        payload = {
+            "gas_pct": round(gas_pct, 2),
+            "temp_c": temp if temp is not None else 0.0,
+            "humidity": hum if hum is not None else 0.0,
             "lux": lux if lux != -1 else 0,
-            "press": press if press != -1 else 0
+            "pressure_hpa": pressure if pressure != -1 else 0.0,
+            "timestamp_ms": time.ticks_ms()
         }
 
-        # 3. AFFICHAGE KAWAII (Pour tes yeux dans Thonny) 🌸
-        # On choisit une émoticône selon la situation
-        mood = "(^･o･^)ﾉ"  # Chat coucou
-        statut = "Tout va bien !"
-        
-        if data['gaz_pct'] > 20:
-            mood = "(>﹏<)"  # Panique
-            statut = "ATTENTION GAZ !"
-        elif data['temp'] > 30:
-            mood = "(🥵)"    # Chaud
-            statut = "Trop chaud !"
-        
-        print(f"\n✨ {mood} {statut}")
-        print(f"   ├─ 🌡️  Temp : {data['temp']}°C")
-        print(f"   ├─ 💧  Hum  : {data['hum']}%")
-        print(f"   ├─ 🍃  Gaz  : {data['gaz_pct']}%")
-        print(f"   ├─ ☀️  Lux  : {data['lux']}")
-        print(f"   └─ ☁️  Pres : {data['press']} hPa")
-        
-        # 4. ENVOI DISCRET (Pour le site web) 🤫
-        # C'est cette ligne que le bridge.py va lire !
-        print(json.dumps(data))
+        # 3. Output for Serial Bridge (JSON only)
+        # We suppress extra text to prevent parsing errors in bridge.py
+        print(json.dumps(payload))
 
-        # 5. SÉCURITÉ
-        if pct_gaz > 30: buzzer.alert()
-        elif temp is not None and temp > 35: buzzer.beep(0.5)
+        # 4. Safety Logic
+        if gas_pct > 30.0:
+            buzzer.alert()
+        elif temp is not None and temp > 35.0:
+            buzzer.beep(0.5)
 
     except Exception as e:
-        print(f"❌ Oupsie : {e}")
+        # Log error to stderr if supported, or print clear error message
+        print(json.dumps({"error": str(e)}))
 
-    time.sleep(300) # Pause de 5 minutes avant la prochaine lecture
+    time.sleep(5)
