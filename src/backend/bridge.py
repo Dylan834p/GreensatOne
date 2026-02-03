@@ -1,10 +1,22 @@
-import serial
 import serial.tools.list_ports
 import json
 import sqlite3
 import os
 from datetime import datetime, timedelta, date
 import time
+
+USE_SIM = False
+# Make this True to use simulated data
+
+if USE_SIM:
+    try:
+        from sim_hardware import FakeSerial as Serial
+    except ImportError:
+        import serial
+        Serial = serial.Serial
+else:
+    import serial
+    Serial = serial.Serial
 
 # --- CONFIGURATION ---
 PORT_USB = 'COM5'
@@ -254,7 +266,7 @@ if __name__ == "__main__":
     while True: # Outer Loop: Handles Reconnections
         try:
             print(f"{C_YELLOW}Connecting to {PORT_USB}...{C_RESET}")
-            ser = serial.Serial(PORT_USB, BAUDRATE, timeout=1)
+            ser = Serial(PORT_USB, BAUDRATE, timeout=1)
             print(f"{C_GREEN}✅ Connected! Bridge running.{C_RESET}")
 
             while True: # Inner Loop: Handles Data Processing
@@ -299,7 +311,7 @@ if __name__ == "__main__":
                     maybe_vacuum(conn)
                     last_vacuum_day = now.date()
 
-        except (serial.SerialException, OSError) as e:
+        except (Serial.SerialException, OSError) as e:
             print(f"{C_RED}🔌 Disconnected: {e}{C_RESET}")
             print(f"{C_YELLOW}Retrying connection in 5 seconds...{C_RESET}")
             try: ser.close() 
