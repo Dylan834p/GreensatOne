@@ -1,10 +1,85 @@
 import sqlite3
 import threading
+from datetime import datetime
 threads = []
 
-DB_PATH = r''
+DB_PATH = 'greensat.db'
 
 # --- Aggregation and Maintenance Scripts ---
+
+def db_manager():
+    """
+    Background worker that handles schema maintenance and scheduled aggregations.
+    Runs once at startup, then triggers every hour on the hour.
+    """
+    print("🔧 DB Manager: Starting maintenance thread...")
+    
+    while True:
+        now = datetime.now()
+        
+        # 2. Trigger at the top of every hour (Minute 0)
+        # We also check seconds < 10 to ensure we don't miss the window 
+        # but don't run it multiple times in the same minute.
+        if now.minute == 0:
+            print(f"🕒 DB Manager: Running scheduled tasks for {now.strftime('%Y-%m-%d %H:00')}...")
+            try:
+                with open_db() as conn:
+                    aggregate_hours(conn)
+                    aggregate_days(conn)
+                    prune_raw(conn)
+                    
+                    # Optional: Vacuum once a day at midnight
+                    if now.hour == 0:
+                        print("🧹 DB Manager: Running daily VACUUM...")
+                        maybe_vacuum(conn)
+                        
+                print("✅ DB Manager: Maintenance complete.")
+            except Exception as e:
+                print(f"❌ DB Manager Error: {e}")
+            
+            # Sleep for 61 seconds to ensure we exit the minute 0 window
+            time.sleep(61)
+        else:
+            # Sleep and check every 30 seconds to stay responsive
+            time.sleep(30)
+# Helpers
+
+def open_db():
+    """Helper to create a thread-safe connection with reasonable timeouts."""
+    conn = sqlite3.connect(DB_PATH, timeout=20)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
+    return conn
+
+def prune_raw(conn: sqlite3.Connection):
+    """
+    Enforces data retention policies via age-based deletion.
+    
+    Logic:
+    1. Mesures: Deletes raw rows older than 48 hours to save space.
+    2. Hourly: Deletes summarized hours older than 90 days.
+    3. Sequence: This must run AFTER aggregation to ensure data is summarized 
+       before it is purged.
+    """
+    conn.execute("DELETE FROM mesures WHERE date_time < datetime('now', '-48 hours')")
+    conn.execute("DELETE FROM hourly_history WHERE time_label < datetime('now', '-90 days')")
+    conn.commit()
+
+def maybe_vacuum(conn: sqlite3.Connection):
+    """
+    Rebuilds the database file to reclaim unused space and defragment the schema.
+    
+    Note: Requires autocommit mode (isolation_level = None) because VACUUM 
+    cannot run inside an active transaction.
+    """
+    try:
+        conn.isolation_level = None
+        conn.execute("VACUUM")
+    except sqlite3.OperationalError as e:
+        print(f"Vacuum failed: {e}")
+    finally:
+        conn.isolation_level = ""
+
 
 def aggregate_hours(conn: sqlite3.Connection):
     """
@@ -94,35 +169,6 @@ def aggregate_days(conn: sqlite3.Connection):
     conn.execute(sql)
     conn.commit()
 
-def prune_raw(conn: sqlite3.Connection):
-    """
-    Enforces data retention policies via age-based deletion.
-    
-    Logic:
-    1. Mesures: Deletes raw rows older than 48 hours to save space.
-    2. Hourly: Deletes summarized hours older than 90 days.
-    3. Sequence: This must run AFTER aggregation to ensure data is summarized 
-       before it is purged.
-    """
-    conn.execute("DELETE FROM mesures WHERE date_time < datetime('now', '-48 hours')")
-    conn.execute("DELETE FROM hourly_history WHERE time_label < datetime('now', '-90 days')")
-    conn.commit()
-
-def maybe_vacuum(conn: sqlite3.Connection):
-    """
-    Rebuilds the database file to reclaim unused space and defragment the schema.
-    
-    Note: Requires autocommit mode (isolation_level = None) because VACUUM 
-    cannot run inside an active transaction.
-    """
-    try:
-        conn.isolation_level = None
-        conn.execute("VACUUM")
-    except sqlite3.OperationalError as e:
-        print(f"Vacuum failed: {e}")
-    finally:
-        conn.isolation_level = ""
-
 # Ensure database layout
 
 def ensure_schema(conn: sqlite3.Connection):
@@ -177,3 +223,5 @@ def ensure_schema(conn: sqlite3.Connection):
     cur.execute("CREATE INDEX IF NOT EXISTS idx_hourly_dt ON hourly_history(time_label)")
 
     conn.commit()
+
+    return True
