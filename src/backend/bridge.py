@@ -320,7 +320,6 @@ if __name__ == "__main__":
                     print(f"{C_RED}⚠️ Pico Sensor Error: {data['error']}{C_RESET}")
                     continue
 
-                now = datetime.now()
                 print(line)
                 # Save Data
                 if insert_raw(conn, data, now):
