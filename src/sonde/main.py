@@ -1,7 +1,15 @@
 import time
 import json
+import network
+import requests  # ou 'urequests' selon la version de MicroPython
 from machine import Pin, I2C # type: ignore
 from sensors import GasSensor, TempHumSensor, LightSensor, PressureSensor, Alarm
+
+# --- Configuration: Station & Réseau ---
+DEVICE_ID = 1  # 1 pour la station 1, 2 pour la station 2
+WIFI_SSID = "NOM_DE_TON_WIFI"
+WIFI_PASSWORD = "MOT_DE_PASSE_WIFI"
+API_URL = "http://192.168.X.X:5000/api/data"  # L'URL que Jan va te donner
 
 # --- Configuration: Hardware Pins ---
 PIN_DHT_POWER = 14
@@ -15,10 +23,21 @@ PIN_SDA_LUX   = 0
 PIN_SCL_LUX   = 1
 PIN_BUZZER_POWER = 8
 
+# --- Connexion Wi-Fi ---
+def connect_wifi():
+    wlan = network.WLAN(network.STA_IF)
+    wlan.active(True)
+    if not wlan.isconnected():
+        print("Connexion au réseau Wi-Fi...")
+        wlan.connect(WIFI_SSID, WIFI_PASSWORD)
+        while not wlan.isconnected():
+            time.sleep(1)
+    print("Wi-Fi Connecté! IP:", wlan.ifconfig()[0])
+
 # --- Initialization: Power Rails ---
 dht_power = Pin(PIN_DHT_POWER, Pin.OUT)
 bmp_power = Pin(PIN_BMP_POWER, Pin.OUT)
-buzzer_power = Pin(PIN_BUZZER_POWER, Pin.OUT)
+buzzer_power = Pin(PIN_BUZZER_POWER, Pin.OUT) 
 dht_power.value(1)
 bmp_power.value(1)
 buzzer_power.value(1)
@@ -35,33 +54,37 @@ dht_sensor = TempHumSensor(PIN_DHT_DATA)
 lux_sensor = LightSensor(i2c_lux)
 bmp_sensor = PressureSensor(i2c_pres)
 
-# Calibration sequence
+# Démarrage
 gas_sensor.calibrate()
-
+connect_wifi()
 print("System Initialized. Starting Telemetry...")
 
 while True:
     try:
         # 1. Data Acquisition
         raw_gas, gas_pct = gas_sensor.read()
-        print(raw_gas, gas_pct)
         temp, hum = dht_sensor.read()
         lux = lux_sensor.read()
         pressure = bmp_sensor.read()
         
-        # 2. Data Normalization
-        payload = {
-            "gas_pct": round(gas_pct, 2),
+        # 2. Data Normalization (Format Dictionnaire pour API)
+        telemetry_packet = {
+            "device_id": DEVICE_ID,
             "temp_c": temp if temp is not None else 0.0,
             "humidity": hum if hum is not None else 0.0,
             "lux": lux if lux != -1 else 0,
-            "pressure_hpa": pressure if pressure != -1 else 0.0,
-            "timestamp_ms": time.ticks_ms()
+            "pressure": pressure if pressure != -1 else 0.0,
+            "gas_pct": round(gas_pct, 2),
+            "timestamp": time.time()
         }
 
-        # 3. Output for Serial Bridge (JSON only)
-        # We suppress extra text to prevent parsing errors in bridge.py
-        print(json.dumps(payload))
+        # 3. Envoi des données vers l'URL via Wi-Fi
+        try:
+            response = requests.post(API_URL, json=telemetry_packet)
+            print(f"Envoyé avec succès (Code: {response.status_code})")
+            response.close() # Très important pour ne pas saturer la mémoire du Pico
+        except Exception as e:
+            print(f"Erreur d'envoi Wi-Fi : {str(e)}")
 
         # 4. Safety Logic
         if gas_pct > 30.0:
@@ -70,7 +93,7 @@ while True:
             buzzer.beep(0.5)
 
     except Exception as e:
-        # Log error to stderr if supported, or print clear error message
         print(json.dumps({"error": str(e)}))
 
+    # 5. Attente stricte de 2 secondes
     time.sleep(2)
