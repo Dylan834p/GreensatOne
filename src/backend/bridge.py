@@ -54,7 +54,7 @@ HOURLY_COLS = (
     "gas_min, gas_max, gas_avg, "
     "press_min, press_max, press_avg, "
     "air_min, air_max, air_avg, "
-    "sample_count"
+    "sample_count, device_id"
 )
 
 def open_db():
@@ -66,22 +66,30 @@ def open_db():
 def ensure_schema(conn: sqlite3.Connection):
     cur = conn.cursor()
     cur.execute('''CREATE TABLE IF NOT EXISTS mesures (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, 
-        date_time TEXT, 
-        temp REAL, 
-        hum REAL, 
-        lux REAL, 
-        gas_pct REAL, 
-        press REAL, 
-        air_pct REAL
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date_time TEXT,
+        temp REAL,
+        hum REAL,
+        lux REAL,
+        gas_pct REAL,
+        press REAL,
+        air_pct REAL,
+        device_id INTEGER DEFAULT 0
     )''')
-    # Summary tables
-    cur.execute(f"CREATE TABLE IF NOT EXISTS hourly_history (time_label TEXT PRIMARY KEY, {HOURLY_COLS})")
-    cur.execute(f"CREATE TABLE IF NOT EXISTS daily_history  (time_label TEXT PRIMARY KEY, {HOURLY_COLS})")
+
+    # Summary tables: include device_id in primary key
+    cur.execute(f"CREATE TABLE IF NOT EXISTS hourly_history (time_label TEXT NOT NULL, device_id INTEGER NOT NULL, {HOURLY_COLS}, PRIMARY KEY(time_label, device_id))")
+    cur.execute(f"CREATE TABLE IF NOT EXISTS daily_history  (time_label TEXT NOT NULL, device_id INTEGER NOT NULL, {HOURLY_COLS}, PRIMARY KEY(time_label, device_id))")
+
+    # Add missing columns for older hourly/daily tables
+    for table in ['hourly_history', 'daily_history']:
+        cols = [r[1] for r in cur.execute(f"PRAGMA table_info({table})").fetchall()]
+        if 'device_id' not in cols:
+            cur.execute(f"ALTER TABLE {table} ADD COLUMN device_id INTEGER DEFAULT 0")
 
     # Helpful indexes
     cur.execute("CREATE INDEX IF NOT EXISTS idx_mesures_datetime ON mesures(date_time)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_hourly_time     ON hourly_history(time_label)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_hourly_time ON hourly_history(time_label)")
     conn.commit()
 
 def load_last_hour_start(conn: sqlite3.Connection) -> datetime:
@@ -102,26 +110,28 @@ def load_last_hour_start(conn: sqlite3.Connection) -> datetime:
 def insert_raw(conn: sqlite3.Connection, data: dict, now: datetime) -> bool:
     try:
         cur = conn.cursor()
-        
+
         temp = data.get("temp_c", data.get("temp", 0))
         hum  = data.get("humidity", data.get("hum", 0))
-        gas  = data.get("gas_pct", 0)
+        gas  = data.get("gas_pct", data.get("gas", 0))
         lux  = data.get("lux", 0)
         pres = data.get("pressure_hpa", data.get("press", 0))
+        device_id = int(data.get("device_id", data.get("deviceId", data.get("id", 0))))
         
         air_pct = round(100.0 - float(gas), 1)
 
         cur.execute("""
-            INSERT INTO mesures (date_time, temp, hum, gas_pct, lux, press, air_pct)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO mesures (date_time, temp, hum, lux, gas_pct, press, air_pct, device_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             fmt(now),
             temp,
             hum,
-            gas,
             lux,
+            gas,
             pres,
-            air_pct
+            air_pct,
+            device_id
         ))
         conn.commit()
         return True
@@ -144,20 +154,21 @@ def aggregate_hour(conn: sqlite3.Connection, start: datetime, end: datetime):
           gas_min, gas_max, gas_avg,
           press_min, press_max, press_avg,
           air_min, air_max, air_avg,
-          sample_count
+          sample_count, device_id
         )
         SELECT
           ? AS time_label,
           MIN(temp), MAX(temp), AVG(temp),
-          MIN(hum),  MAX(hum),  AVG(hum),
-          MIN(lux),  MAX(lux),  AVG(lux),
+          MIN(hum), MAX(hum), AVG(hum),
+          MIN(lux), MAX(lux), AVG(lux),
           MIN(gas_pct), MAX(gas_pct), AVG(gas_pct),
           MIN(press), MAX(press), AVG(press),
           MIN(air_pct), MAX(air_pct), AVG(air_pct),
-          COUNT(*)
+          COUNT(*), device_id
         FROM mesures
         WHERE date_time >= ?
-          AND date_time <  ?
+          AND date_time < ?
+        GROUP BY device_id
         HAVING COUNT(*) > 0
     """, (fmt(start), fmt(start), fmt(end)))
     conn.commit()
@@ -177,20 +188,23 @@ def aggregate_day_from_hourly(conn: sqlite3.Connection, day_start: datetime, day
           gas_min, gas_max, gas_avg,
           press_min, press_max, press_avg,
           air_min, air_max, air_avg,
-          sample_count
+          sample_count,
+          device_id
         )
         SELECT
-          substr(?, 1, 10) AS time_label,
+          substr(time_label, 1, 10) AS time_label,
           MIN(temp_min), MAX(temp_max), AVG(temp_avg),
-          MIN(hum_min),  MAX(hum_max),  AVG(hum_avg),
-          MIN(lux_min),  MAX(lux_max),  AVG(lux_avg),
-          MIN(gas_min),  MAX(gas_max),  AVG(gas_avg),
+          MIN(hum_min), MAX(hum_max), AVG(hum_avg),
+          MIN(lux_min), MAX(lux_max), AVG(lux_avg),
+          MIN(gas_min), MAX(gas_max), AVG(gas_avg),
           MIN(press_min), MAX(press_max), AVG(press_avg),
-          MIN(air_min),  MAX(air_max),  AVG(air_avg),
-          SUM(sample_count)
+          MIN(air_min), MAX(air_max), AVG(air_avg),
+          SUM(sample_count),
+          device_id
         FROM hourly_history
         WHERE time_label >= ?
-          AND time_label <  ?
+          AND time_label < ?
+        GROUP BY device_id, substr(time_label, 1, 10)
         HAVING SUM(sample_count) > 0
     """, (fmt(day_start), fmt(day_start), fmt(day_end)))
     conn.commit()
@@ -222,6 +236,8 @@ def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
 
 def choose_port():
+    if USE_SIM:
+        return
     global PORT_USB
     while True:
         ports = serial.tools.list_ports.comports()

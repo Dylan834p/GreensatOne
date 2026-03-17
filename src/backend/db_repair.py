@@ -14,7 +14,7 @@ HOURLY_COLS = (
     "gas_min, gas_max, gas_avg, "
     "press_min, press_max, press_avg, "
     "air_min, air_max, air_avg, "
-    "sample_count"
+    "sample_count, device_id"
 )
 
 def open_db():
@@ -27,18 +27,19 @@ def open_db():
 def ensure_schema(conn: sqlite3.Connection):
     cur = conn.cursor()
     cur.execute('''CREATE TABLE IF NOT EXISTS mesures (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, 
-        date_time TEXT, 
-        temp REAL, 
-        hum REAL, 
-        lux REAL, 
-        gas_pct REAL, 
-        press REAL, 
-        air_pct REAL
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date_time TEXT,
+        temp REAL,
+        hum REAL,
+        lux REAL,
+        gas_pct REAL,
+        press REAL,
+        air_pct REAL,
+        device_id INTEGER DEFAULT 0
     )''')
     # Ensure summary tables exist (matches your bridge structure)
-    cur.execute(f"CREATE TABLE IF NOT EXISTS hourly_history (time_label TEXT PRIMARY KEY, {HOURLY_COLS})")
-    cur.execute(f"CREATE TABLE IF NOT EXISTS daily_history  (time_label TEXT PRIMARY KEY, {HOURLY_COLS})")
+    cur.execute(f"CREATE TABLE IF NOT EXISTS hourly_history (time_label TEXT NOT NULL, device_id INTEGER NOT NULL, {HOURLY_COLS}, PRIMARY KEY(time_label, device_id))")
+    cur.execute(f"CREATE TABLE IF NOT EXISTS daily_history  (time_label TEXT NOT NULL, device_id INTEGER NOT NULL, {HOURLY_COLS}, PRIMARY KEY(time_label, device_id))")
 
     # Helpful indexes
     cur.execute("CREATE INDEX IF NOT EXISTS idx_mesures_datetime ON mesures(date_time)")
@@ -60,6 +61,7 @@ def repair_hourly(conn: sqlite3.Connection) -> int:
     cur.execute("""
         INSERT OR REPLACE INTO hourly_history (
           time_label,
+          device_id,
           temp_min, temp_max, temp_avg,
           hum_min, hum_max, hum_avg,
           lux_min, lux_max, lux_avg,
@@ -70,16 +72,17 @@ def repair_hourly(conn: sqlite3.Connection) -> int:
         )
         SELECT
           strftime('%Y-%m-%d %H:00:00', date_time) AS hr,
+          device_id,
           MIN(temp), MAX(temp), AVG(temp),
-          MIN(hum),  MAX(hum),  AVG(hum),
-          MIN(lux),  MAX(lux),  AVG(lux),
+          MIN(hum), MAX(hum), AVG(hum),
+          MIN(lux), MAX(lux), AVG(lux),
           MIN(gas_pct), MAX(gas_pct), AVG(gas_pct),
           MIN(press), MAX(press), AVG(press),
           MIN(air_pct), MAX(air_pct), AVG(air_pct),
           COUNT(*)
         FROM mesures
         WHERE date_time < datetime('now','start of hour')  -- exclude current hour
-        GROUP BY hr
+        GROUP BY hr, device_id
         HAVING COUNT(*) > 0
     """)
     conn.commit()
@@ -104,6 +107,7 @@ def repair_daily(conn: sqlite3.Connection) -> int:
     cur.execute("""
         INSERT OR REPLACE INTO daily_history (
           time_label,
+          device_id,
           temp_min, temp_max, temp_avg,
           hum_min, hum_max, hum_avg,
           lux_min, lux_max, lux_avg,
@@ -114,16 +118,17 @@ def repair_daily(conn: sqlite3.Connection) -> int:
         )
         SELECT
           strftime('%Y-%m-%d', time_label) AS dy,
+          device_id,
           MIN(temp_min), MAX(temp_max), AVG(temp_avg),
-          MIN(hum_min),  MAX(hum_max),  AVG(hum_avg),
-          MIN(lux_min),  MAX(lux_max),  AVG(lux_avg),
-          MIN(gas_min),  MAX(gas_max),  AVG(gas_avg),
+          MIN(hum_min), MAX(hum_max), AVG(hum_avg),
+          MIN(lux_min), MAX(lux_max), AVG(lux_avg),
+          MIN(gas_min), MAX(gas_max), AVG(gas_avg),
           MIN(press_min), MAX(press_max), AVG(press_avg),
-          MIN(air_min),  MAX(air_max),  AVG(air_avg),
+          MIN(air_min), MAX(air_max), AVG(air_avg),
           SUM(sample_count)
         FROM hourly_history
         WHERE time_label < datetime('now','start of day')   -- exclude today
-        GROUP BY dy
+        GROUP BY dy, device_id
         HAVING SUM(sample_count) > 0
     """)
     conn.commit()

@@ -15,6 +15,7 @@ class FakeSerial:
         data = {
             "pressure_hpa": round(random.uniform(980, 1010), 1),
             "timestamp_ms": int((time.time() - self.start_time) * 1000),
+            "device_id": 1,
             "gas_pct": round(random.uniform(1.0, 5.0), 2),
             "temp_c": random.randint(20, 25),
             "humidity": random.randint(30, 50),
