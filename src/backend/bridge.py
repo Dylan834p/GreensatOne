@@ -4,9 +4,15 @@ import sqlite3
 import os
 from datetime import datetime, timedelta, date
 import time
+import subprocess
+import sys
 
-USE_SIM = False
+USE_SIM = True
 # Make this True to use simulated data
+
+def run_backup_process():
+    script_path = os.path.join(os.path.dirname(__file__), "backup.py")
+    subprocess.Popen([sys.executable, script_path])
 
 if USE_SIM:
     try:
@@ -223,6 +229,8 @@ def clear_screen():
 
 def choose_port():
     global PORT_USB
+    if USE_SIM:
+        return
     while True:
         ports = serial.tools.list_ports.comports()
         if not ports:
@@ -260,6 +268,8 @@ if __name__ == "__main__":
     ensure_schema(conn)
     last_hour_start = load_last_hour_start(conn)
     last_vacuum_day: date | None = None
+    now = datetime.now()
+    last_backup_hour = now.hour - 1
 
     print(f"{C_GREEN}SQL Bridge Initialized.{C_RESET}")
 
@@ -270,6 +280,12 @@ if __name__ == "__main__":
             print(f"{C_GREEN}✅ Connected! Bridge running.{C_RESET}")
 
             while True: # Inner Loop: Handles Data Processing
+                now = datetime.now()
+
+                if now.hour != last_backup_hour:
+                    run_backup_process()
+                    last_backup_hour = now.hour
+
                 if ser.in_waiting <= 0:
                     time.sleep(0.1)
                     continue
