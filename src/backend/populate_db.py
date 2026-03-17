@@ -5,30 +5,36 @@ import math
 from datetime import datetime, timedelta
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'greensat.db')
-DEVICE_ID = 0
 
-def get_sim_val(current_date):
+def get_sim_val(current_date, device_id=0):
+    """
+    Generates realistic sensor data. 
+    Uses device_id to create unique 'micro-climates' for each device.
+    """
     day_of_year = current_date.timetuple().tm_yday
     hour = current_date.hour + current_date.minute / 60.0
     
+    # Each device gets a slight unique bias based on its ID
+    dev_bias = (device_id * 1.2) - 2.0 
+    
     season_temp = -math.cos((day_of_year - 20) / 365 * 2 * math.pi) * 10 
     daily_temp = -math.cos(((hour - 4) / 24) * 2 * math.pi) * 5
-    temp = 15 + season_temp + daily_temp + random.uniform(-1, 1)
+    temp = 15 + season_temp + daily_temp + dev_bias + random.uniform(-1, 1)
     
     if 6 <= hour <= 21:
         sun_angle = math.sin(((hour - 6) / 15) * math.pi)
-        lux = max(0, 1000 * sun_angle + random.uniform(-50, 50))
+        lux = max(0, 1000 * sun_angle + (device_id * 10) + random.uniform(-50, 50))
     else:
         lux = 0
         
-    hum = max(20, min(100, 60 - (daily_temp * 2) + random.uniform(-5, 5)))
+    hum = max(20, min(100, 60 - (daily_temp * 2) - dev_bias + random.uniform(-5, 5)))
     press = 1013.0 + random.uniform(-5, 5)
     gas = random.uniform(2, 5) + (random.uniform(10, 20) if random.random() > 0.99 else 0)
     air = 100 - gas
     
     return temp, hum, lux, gas, press, air
 
-def populate_tiered_db(years=5):
+def populate_tiered_db(years=1, num_devices=1):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
@@ -42,6 +48,7 @@ def populate_tiered_db(years=5):
         "sample_count INTEGER, device_id INTEGER NOT NULL"
     )
 
+    # Clean start
     cursor.execute("DROP TABLE IF EXISTS mesures")
     cursor.execute("DROP TABLE IF EXISTS hourly_history")
     cursor.execute("DROP TABLE IF EXISTS daily_history")
@@ -57,59 +64,65 @@ def populate_tiered_db(years=5):
         gas_pct REAL,
         press REAL,
         air_pct REAL,
-        device_id INTEGER DEFAULT 0
+        device_id INTEGER
     )''')
 
     now = datetime.now()
-    
-    daily_data = []
-    for d in range(int(365 * years)):
-        date = now - timedelta(days=d)
-        samples = [get_sim_val(date.replace(hour=h)) for h in [4, 12, 18, 0]]
-        row = [date.strftime("%Y-%m-%d")]
-        for i in range(6): 
-            vals = [s[i] for s in samples]
-            row.extend([round(min(vals), 2), round(max(vals), 2), round(sum(vals)/4, 2)])
-        row.extend([1440, DEVICE_ID])
-        daily_data.append(tuple(row))
-    
-    cursor.executemany(f"INSERT INTO daily_history VALUES ({','.join(['?']*21)})", daily_data)
 
-    hourly_data = []
-    for h in range(24 * 30):
-        date = now - timedelta(hours=h)
-        samples = [get_sim_val(date), get_sim_val(date - timedelta(minutes=30))]
-        row = [date.strftime("%Y-%m-%d %H:00:00")]
-        for i in range(6):
-            vals = [s[i] for s in samples]
-            row.extend([round(min(vals), 2), round(max(vals), 2), round(sum(vals)/2, 2)])
-        row.extend([60, DEVICE_ID])
-        hourly_data.append(tuple(row))
+    for dev_id in range(num_devices):
+        print(f"📡 Generating data for Device {dev_id}...")
+        
+        # 1. Daily History (for specific device)
+        daily_data = []
+        for d in range(int(365 * years)):
+            date = now - timedelta(days=d)
+            samples = [get_sim_val(date.replace(hour=h), dev_id) for h in [4, 12, 18, 0]]
+            row = [date.strftime("%Y-%m-%d")]
+            for i in range(6): 
+                vals = [s[i] for s in samples]
+                row.extend([round(min(vals), 2), round(max(vals), 2), round(sum(vals)/4, 2)])
+            row.extend([1440, dev_id])
+            daily_data.append(tuple(row))
+        cursor.executemany(f"INSERT INTO daily_history VALUES ({','.join(['?']*21)})", daily_data)
 
-    cursor.executemany(f"INSERT INTO hourly_history VALUES ({','.join(['?']*21)})", hourly_data)
+        # 2. Hourly History (for specific device)
+        hourly_data = []
+        for h in range(24 * 30):
+            date = now - timedelta(hours=h)
+            samples = [get_sim_val(date, dev_id), get_sim_val(date - timedelta(minutes=30), dev_id)]
+            row = [date.strftime("%Y-%m-%d %H:00:00")]
+            for i in range(6):
+                vals = [s[i] for s in samples]
+                row.extend([round(min(vals), 2), round(max(vals), 2), round(sum(vals)/2, 2)])
+            row.extend([60, dev_id])
+            hourly_data.append(tuple(row))
+        cursor.executemany(f"INSERT INTO hourly_history VALUES ({','.join(['?']*21)})", hourly_data)
 
-    raw_data = []
-    for m in range(1440):
-        date = now - timedelta(minutes=m)
-        t, h, l, g, p, a = get_sim_val(date)
-        raw_data.append((date.strftime("%Y-%m-%d %H:%M:%S"),
-                         round(t, 2), int(h), int(l), round(g, 2), round(p, 1), round(a, 1), DEVICE_ID))
-
-    cursor.executemany("INSERT INTO mesures (date_time, temp, hum, lux, gas_pct, press, air_pct, device_id) VALUES (?,?,?,?,?,?,?,?)", raw_data)
+        # 3. Raw Mesures (for specific device)
+        raw_data = []
+        for m in range(1440):
+            date = now - timedelta(minutes=m)
+            t, h, l, g, p, a = get_sim_val(date, dev_id)
+            raw_data.append((date.strftime("%Y-%m-%d %H:%M:%S"),
+                             round(t, 2), int(h), int(l), round(g, 2), round(p, 1), round(a, 1), dev_id))
+        
+        # This explicitly inserts for the current dev_id
+        cursor.executemany("INSERT INTO mesures (date_time, temp, hum, lux, gas_pct, press, air_pct, device_id) VALUES (?,?,?,?,?,?,?,?)", raw_data)
 
     conn.commit()
     conn.close()
-    print(f"✅ Database populated: {years}y Daily, 30d Hourly, 24h Raw.")
+    print(f"\n✅ SUCCESS: Database populated for {num_devices} devices.")
 
 
 if __name__ == "__main__":
     try:
-        user_input = input("Enter number of years to simulate (e.g., 0.5, 2, 10): ").strip()
-        years_to_gen = float(user_input) if user_input else 1.0
-        if years_to_gen <= 0:
-            raise ValueError
+        y_input = input("Enter number of years to simulate: ").strip()
+        years_to_gen = float(y_input) if y_input else 1.0
+        
+        d_input = input("Enter number of devices to simulate: ").strip()
+        num_devs = int(d_input) if d_input else 1
     except ValueError:
-        print("Invalid input. Defaulting to 1 year.")
-        years_to_gen = 1.0
+        print("Invalid input. Defaulting to 1 year / 1 device.")
+        years_to_gen, num_devs = 1.0, 1
 
-    populate_tiered_db(years_to_gen)
+    populate_tiered_db(years_to_gen, num_devs)
