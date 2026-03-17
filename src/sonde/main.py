@@ -13,13 +13,15 @@ PIN_SDA_BMP   = 2
 PIN_SCL_BMP   = 3
 PIN_SDA_LUX   = 0
 PIN_SCL_LUX   = 1
+PIN_BUZZER_POWER = 8
 
 # --- Initialization: Power Rails ---
 dht_power = Pin(PIN_DHT_POWER, Pin.OUT)
 bmp_power = Pin(PIN_BMP_POWER, Pin.OUT)
-
+buzzer_power = Pin(PIN_BUZZER_POWER, Pin.OUT)
 dht_power.value(1)
 bmp_power.value(1)
+buzzer_power.value(1)
 time.sleep(2)  # Sensor stabilization delay
 
 # --- Initialization: Peripherals ---
