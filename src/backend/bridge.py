@@ -7,7 +7,7 @@ import time
 import subprocess
 import sys
 
-USE_SIM = True
+USE_SIM = False
 # Make this True to use simulated data
 
 def run_backup_process():
@@ -321,10 +321,16 @@ if __name__ == "__main__":
                     continue
 
                 now = datetime.now()
-                print(line)
+                
+                # Récupérer l'ID de la station depuis les données reçues
+                station_id = data.get("device_id", "Inconnu")
+
                 # Save Data
                 if insert_raw(conn, data, now):
-                    print(f"{C_GREEN}📥 [{now.strftime('%H:%M:%S')}] Telemetry Stored")
+                    # On ajoute la station dans le message en vert
+                    print(f"{C_GREEN}📥 [{now.strftime('%H:%M:%S')}] [Station {station_id}] Telemetry Stored{C_RESET}")
+                    # On affiche la ligne des données en dessous
+                    print(f"   Données reçues : {line}")
 
                 # Aggregation & Rollover
                 current_hour_start = floor_to_hour(now)

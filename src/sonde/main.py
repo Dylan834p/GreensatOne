@@ -3,6 +3,10 @@ import json
 from machine import Pin, I2C # type: ignore
 from sensors import GasSensor, TempHumSensor, LightSensor, PressureSensor, Alarm
 
+#---configuration: station ---
+
+DEVICE_ID = "1"  # Unique identifier for this station, can be set via config file or environment variable
+
 # --- Configuration: Hardware Pins ---
 PIN_DHT_POWER = 14
 PIN_DHT_DATA  = 15
@@ -51,6 +55,7 @@ while True:
         
         # 2. Data Normalization
         payload = {
+            "device_id": int(DEVICE_ID),  # <--- IL MANQUAIT CETTE LIGNE
             "gas_pct": round(gas_pct, 2),
             "temp_c": temp if temp is not None else 0.0,
             "humidity": hum if hum is not None else 0.0,
