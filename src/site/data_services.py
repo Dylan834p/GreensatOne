@@ -1,52 +1,55 @@
 import sqlite3
 import threading
 from datetime import datetime
+import time
+import os
 threads = []
 
-DB_PATH = 'greensat.db'
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(BASE_DIR, 'greensat.db')
 
 # --- Aggregation and Maintenance Scripts ---
 
+import time
+from datetime import datetime, timedelta
+
 def db_manager():
     """
-    Background worker that handles schema maintenance and scheduled aggregations.
-    Runs once at startup, then triggers every hour on the hour.
+    Handles schema maintenance and hourly aggregations.
+    Execution occurs immediately upon startup and synchronizes to the next hour.
     """
-    print("🔧 DB Manager: Starting maintenance thread...")
-    
+    initial_run = True
+
     while True:
         now = datetime.now()
+
+        if not initial_run:
+            # Calculate seconds until the next hour
+            next_hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+            sleep_duration = (next_hour - now).total_seconds()
+            time.sleep(sleep_duration)
+            now = datetime.now()
         
-        # 2. Trigger at the top of every hour (Minute 0)
-        # We also check seconds < 10 to ensure we don't miss the window 
-        # but don't run it multiple times in the same minute.
-        if now.minute == 0:
-            print(f"🕒 DB Manager: Running scheduled tasks for {now.strftime('%Y-%m-%d %H:00')}...")
-            try:
-                with open_db() as conn:
-                    aggregate_hours(conn)
-                    aggregate_days(conn)
-                    prune_raw(conn)
-                    
-                    # Optional: Vacuum once a day at midnight
-                    if now.hour == 0:
-                        print("🧹 DB Manager: Running daily VACUUM...")
-                        maybe_vacuum(conn)
-                        
-                print("✅ DB Manager: Maintenance complete.")
-            except Exception as e:
-                print(f"❌ DB Manager Error: {e}")
-            
-            # Sleep for 61 seconds to ensure we exit the minute 0 window
-            time.sleep(61)
-        else:
-            # Sleep and check every 30 seconds to stay responsive
-            time.sleep(30)
+        try:
+            with open_db() as conn:
+                aggregate_hours(conn)
+                aggregate_days(conn)
+                prune_raw(conn)
+                
+                if now.hour == 0:
+                    maybe_vacuum(conn)
+        except Exception as e:
+            # Log error to stderr; avoid terminating the thread
+            print(f"Database maintenance failure at {now}: {e}")
+        
+        initial_run = False
+
 # Helpers
 
 def open_db():
     """Helper to create a thread-safe connection with reasonable timeouts."""
     conn = sqlite3.connect(DB_PATH, timeout=20)
+    conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
     return conn
@@ -171,57 +174,53 @@ def aggregate_days(conn: sqlite3.Connection):
 
 # Ensure database layout
 
-def ensure_schema(conn: sqlite3.Connection):
+def ensure_schema():
     """
-    Initializes the database schema based on the provided specifications.
-    
-    Architecture:
-    - mesures: Raw telemetry with auto-incrementing ID.
-    - hourly_history: Aggregated data with a composite Primary Key 
-      on (time_label, device_id) to support UPSERT operations.
-    - daily_history: Same structure as hourly, optimized for long-term storage.
+    Initializes the database schema using a context manager.
+    Returns True if successful, False if an error occurs.
     """
-    cur = conn.cursor()
+    try:
+        with open_db() as conn:
+            cur = conn.cursor()
 
-    # 1. Raw Measurements Table
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS mesures (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            date_time TEXT,
-            temp REAL,
-            hum REAL,
-            lux REAL,
-            gas_pct REAL,
-            press REAL,
-            device_id INTEGER NOT NULL,
-        )
-    """)
+            # 1. Raw Measurements Table
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS mesures (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date_time TEXT,
+                    temp REAL,
+                    hum REAL,
+                    lux REAL,
+                    gas_pct REAL,
+                    press REAL,
+                    device_id INTEGER NOT NULL
+                )
+            """)
 
-    # Definition for history tables (Hourly and Daily)
-    # Both use the same column structure but different time grain
-    history_columns = """
-        time_label TEXT NOT NULL,
-        temp_min REAL, temp_max REAL, temp_avg REAL,
-        hum_min REAL, hum_max REAL, hum_avg REAL,
-        lux_min REAL, lux_max REAL, lux_avg REAL,
-        gas_min REAL, gas_max REAL, gas_avg REAL,
-        press_min REAL, press_max REAL, press_avg REAL,
-        sample_count INTEGER,
-        device_id INTEGER NOT NULL,
-        PRIMARY KEY (time_label, device_id)
-    """
+            # Definition for history tables
+            history_columns = """
+                time_label TEXT NOT NULL,
+                temp_min REAL, temp_max REAL, temp_avg REAL,
+                hum_min REAL, hum_max REAL, hum_avg REAL,
+                lux_min REAL, lux_max REAL, lux_avg REAL,
+                gas_min REAL, gas_max REAL, gas_avg REAL,
+                press_min REAL, press_max REAL, press_avg REAL,
+                sample_count INTEGER,
+                device_id INTEGER NOT NULL,
+                PRIMARY KEY (time_label, device_id)
+            """
 
-    # 2. Hourly History Table
-    cur.execute(f"CREATE TABLE IF NOT EXISTS hourly_history ({history_columns})")
+            # 2. History Tables
+            cur.execute(f"CREATE TABLE IF NOT EXISTS hourly_history ({history_columns})")
+            cur.execute(f"CREATE TABLE IF NOT EXISTS daily_history ({history_columns})")
 
-    # 3. Daily History Table
-    cur.execute(f"CREATE TABLE IF NOT EXISTS daily_history ({history_columns})")
+            # 3. Performance Indexes
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_mesures_dt ON mesures(date_time)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_hourly_dt ON hourly_history(time_label)")
+            
+            conn.commit()
+            return True
 
-    # 4. Performance Indexes
-    # Crucial for the strftime filters in the aggregation scripts
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_mesures_dt ON mesures(date_time)")
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_hourly_dt ON hourly_history(time_label)")
-
-    conn.commit()
-
-    return True
+    except Exception as e:
+        print(f"Database initialization failed: {e}")
+        return False
