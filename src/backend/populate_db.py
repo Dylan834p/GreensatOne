@@ -4,9 +4,10 @@ import random
 import math
 from datetime import datetime, timedelta
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'greensat.db')
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(BASE_DIR, 'greensat.db')
 
-def get_sim_val(current_date, device_id=0):
+def get_sim_val(current_date, device_id=0, device_id=0):
     """
     Generates realistic sensor data. 
     Uses device_id to create unique 'micro-climates' for each device.
@@ -20,20 +21,23 @@ def get_sim_val(current_date, device_id=0):
     season_temp = -math.cos((day_of_year - 20) / 365 * 2 * math.pi) * 10 
     daily_temp = -math.cos(((hour - 4) / 24) * 2 * math.pi) * 5
     temp = 15 + season_temp + daily_temp + dev_bias + random.uniform(-1, 1)
+    temp = 15 + season_temp + daily_temp + dev_bias + random.uniform(-1, 1)
     
     if 6 <= hour <= 21:
         sun_angle = math.sin(((hour - 6) / 15) * math.pi)
+        lux = max(0, 1000 * sun_angle + (device_id * 10) + random.uniform(-50, 50))
         lux = max(0, 1000 * sun_angle + (device_id * 10) + random.uniform(-50, 50))
     else:
         lux = 0
         
     hum = max(20, min(100, 60 - (daily_temp * 2) - dev_bias + random.uniform(-5, 5)))
+    hum = max(20, min(100, 60 - (daily_temp * 2) - dev_bias + random.uniform(-5, 5)))
     press = 1013.0 + random.uniform(-5, 5)
     gas = random.uniform(2, 5) + (random.uniform(10, 20) if random.random() > 0.99 else 0)
-    air = 100 - gas
     
-    return temp, hum, lux, gas, press, air
+    return temp, hum, lux, gas, press
 
+def populate_tiered_db(years=1, num_devices=1):
 def populate_tiered_db(years=1, num_devices=1):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -44,7 +48,6 @@ def populate_tiered_db(years=1, num_devices=1):
         "lux_min REAL, lux_max REAL, lux_avg REAL, "
         "gas_min REAL, gas_max REAL, gas_avg REAL, "
         "press_min REAL, press_max REAL, press_avg REAL, "
-        "air_min REAL, air_max REAL, air_avg REAL, "
         "sample_count INTEGER, device_id INTEGER NOT NULL"
     )
 
@@ -112,6 +115,7 @@ def populate_tiered_db(years=1, num_devices=1):
     conn.commit()
     conn.close()
     print(f"\n✅ SUCCESS: Database populated for {num_devices} devices.")
+    print(f"\n✅ SUCCESS: Database populated for {num_devices} devices.")
 
 
 if __name__ == "__main__":
@@ -121,8 +125,16 @@ if __name__ == "__main__":
         
         d_input = input("Enter number of devices to simulate: ").strip()
         num_devs = int(d_input) if d_input else 1
+        y_input = input("Enter number of years to simulate: ").strip()
+        years_to_gen = float(y_input) if y_input else 1.0
+        
+        d_input = input("Enter number of devices to simulate: ").strip()
+        num_devs = int(d_input) if d_input else 1
     except ValueError:
         print("Invalid input. Defaulting to 1 year / 1 device.")
         years_to_gen, num_devs = 1.0, 1
+        print("Invalid input. Defaulting to 1 year / 1 device.")
+        years_to_gen, num_devs = 1.0, 1
 
+    populate_tiered_db(years_to_gen, num_devs)
     populate_tiered_db(years_to_gen, num_devs)
