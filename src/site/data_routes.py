@@ -2,16 +2,9 @@ from flask import Blueprint, request, jsonify
 import sqlite3
 import os
 from datetime import datetime
+from data_services import open_db
 
 data_bp = Blueprint('data', __name__)
-
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'greensat.db')
-
-def get_db():
-    conn = sqlite3.connect(DB_PATH, timeout=10)
-    conn.execute("PRAGMA journal_mode=WAL;")
-    conn.execute("PRAGMA synchronous=NORMAL;")
-    return conn
 
 @data_bp.route('/upload/raw', methods=['POST'])
 def upload_raw():
@@ -37,10 +30,10 @@ def upload_raw():
             
         formatted_time = dt_object.strftime("%Y-%m-%d %H:%M:%S")
 
-        with get_db() as conn:
+        with open_db() as conn:
             conn.execute("""
                 INSERT INTO mesures (date_time, temp, hum, lux, gas_pct, press, device_id)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (formatted_time, temp, hum, lux, gas, pres, device_id))
             conn.commit()
 

@@ -4,7 +4,8 @@ import random
 import math
 from datetime import datetime, timedelta
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'greensat.db')
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.path.join(BASE_DIR, 'greensat.db')
 
 def get_sim_val(current_date, device_id=0):
     day_of_year = current_date.timetuple().tm_yday

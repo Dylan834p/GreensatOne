@@ -1,25 +1,10 @@
 import os
 import sqlite3
 from flask import Blueprint, render_template, jsonify, request
+from data_services import open_db
 
 # Define the blueprint
 api_bp = Blueprint('api', __name__)
-
-# Re-establishing the DB path logic (or move this to a config file)
-SITE_DIR = os.path.dirname(os.path.abspath(__file__))
-BASE_DIR = os.path.dirname(SITE_DIR)
-DB_PATH = os.path.join(BASE_DIR, 'backend', 'greensat.db')
-
-def get_db_connection():
-    if not os.path.exists(DB_PATH):
-        return None
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        conn.execute('PRAGMA journal_mode=WAL;')
-        return conn
-    except Exception:
-        return None
 
 @api_bp.route('/')
 def index():
@@ -27,7 +12,7 @@ def index():
 
 @api_bp.route('/api/data')
 def api_data():
-    conn = get_db_connection()
+    conn = open_db()
     if not conn: return jsonify({"error": "DB Link Down"}), 500
     row = conn.execute('SELECT * FROM mesures ORDER BY date_time DESC LIMIT 1').fetchone()
     conn.close()
@@ -39,13 +24,13 @@ def api_history():
     start_date = request.args.get('start')
     end_date = request.args.get('end')
     
-    conn = get_db_connection()
+    conn = open_db()
     if not conn: return jsonify({"error": "DB Error"}), 500
 
     mapping = """
         time_label AS date_time, 
         temp_avg AS temp, hum_avg AS hum, lux_avg AS lux, 
-        gas_avg AS gas_pct, press_avg AS press, air_avg AS air_pct
+        gas_avg AS gas_pct, press_avg AS press
     """
 
     try:
@@ -72,7 +57,7 @@ def api_history():
 
 @api_bp.route('/api/limits')
 def api_limits():
-    conn = get_db_connection()
+    conn = open_db()
     if not conn: return jsonify({"error": "DB Link Down"}), 500
     row = conn.execute('SELECT MIN(time_label) as first_date FROM daily_history').fetchone()
     conn.close()
