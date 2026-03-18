@@ -1,9 +1,7 @@
 import sqlite3
 import os
 from datetime import datetime
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(BASE_DIR, 'greensat.db')
+from shared.config import DB_PATH
 
 RAW_RETENTION_HOURS = 48
 RUN_VACUUM = True
@@ -14,7 +12,7 @@ HOURLY_COLS = (
     "lux_min, lux_max, lux_avg, "
     "gas_min, gas_max, gas_avg, "
     "press_min, press_max, press_avg, "
-    "sample_count, device_id"
+    "sample_count, device_id INTEGER NOT NULL"
 )
 
 def open_db():
@@ -34,11 +32,11 @@ def ensure_schema(conn: sqlite3.Connection):
         lux REAL,
         gas_pct REAL,
         press REAL,
-        device_id INTEGER DEFAULT 0
+        device_id INTEGER
     )''')
     
-    cur.execute(f"CREATE TABLE IF NOT EXISTS hourly_history (time_label TEXT NOT NULL, device_id INTEGER NOT NULL, {HOURLY_COLS}, PRIMARY KEY(time_label, device_id))")
-    cur.execute(f"CREATE TABLE IF NOT EXISTS daily_history (time_label TEXT NOT NULL, device_id INTEGER NOT NULL, {HOURLY_COLS}, PRIMARY KEY(time_label, device_id))")
+    cur.execute(f"CREATE TABLE IF NOT EXISTS hourly_history (time_label TEXT NOT NULL, {HOURLY_COLS}, PRIMARY KEY(time_label, device_id))")
+    cur.execute(f"CREATE TABLE IF NOT EXISTS daily_history (time_label TEXT NOT NULL, {HOURLY_COLS}, PRIMARY KEY(time_label, device_id))")
 
     cur.execute("CREATE INDEX IF NOT EXISTS idx_mesures_datetime ON mesures(date_time)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_hourly_time ON hourly_history(time_label)")

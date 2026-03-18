@@ -1,8 +1,8 @@
 from flask import Flask
-from api_routes import api_bp
-from data_routes import data_bp
+from routes.api_routes import api_bp
+from routes.data_routes import data_bp
 import threading
-from data_services import ensure_schema, db_manager
+from services.data_services import ensure_schema, db_manager
 threads = []
 
 app = Flask(__name__)

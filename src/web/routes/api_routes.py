@@ -1,7 +1,7 @@
 import os
 import sqlite3
 from flask import Blueprint, render_template, jsonify, request
-from data_services import open_db
+from services.data_services import open_db
 
 # Define the blueprint
 api_bp = Blueprint('api', __name__)

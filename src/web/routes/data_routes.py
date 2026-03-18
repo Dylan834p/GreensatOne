@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify
 import sqlite3
 import os
 from datetime import datetime
-from data_services import open_db
+from services.data_services import open_db
 
 data_bp = Blueprint('data', __name__)
 

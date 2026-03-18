@@ -1,12 +1,8 @@
 import sqlite3
-import threading
 from datetime import datetime
 import time
-import os
+from shared.config import DB_PATH
 threads = []
-
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DB_PATH = os.path.join(BASE_DIR, 'greensat.db')
 
 # --- Aggregation and Maintenance Scripts ---
 
