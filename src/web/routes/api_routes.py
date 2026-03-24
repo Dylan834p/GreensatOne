@@ -25,7 +25,7 @@ def api_data():
     if not conn: return jsonify({"error": "DB Link Down"}), 500
     row = conn.execute('SELECT * FROM mesures WHERE device_id = ? ORDER BY date_time DESC LIMIT 1', (device_id,)).fetchone()
     conn.close()
-    return jsonify(dict(row)) if row else (jsonify({"error": "Empty"}), 404)
+    return jsonify(dict(row)) if row else (jsonify({"error": "Data not found!"}), 200)
 
 @api_bp.route('/api/history')
 def api_history():
@@ -37,29 +37,29 @@ def api_history():
     conn = open_db()
     if not conn: return jsonify({"error": "DB Error"}), 500
 
-    mapping = """time_label AS date_time, temp_avg AS temp, hum_avg AS hum, lux_avg AS lux, gas_avg AS gas_pct, press_avg AS press, air_avg AS air_pct"""
+    mapping = "time_label AS date_time, temp_avg AS temp, hum_avg AS hum, lux_avg AS lux, gas_avg AS gas_pct, press_avg AS press"
 
     try:
         args = (device_id, start_date, end_date)
+        
+        # Default query for 'day' mode if data is missing everywhere
+        query = f"SELECT {mapping} FROM daily_history WHERE device_id=? AND date(time_label) BETWEEN date(?) AND date(?) ORDER BY time_label ASC"
+
         if mode == 'year':
             query = f"SELECT {mapping} FROM daily_history WHERE device_id=? AND date(time_label) BETWEEN date(?) AND date(?) ORDER BY time_label ASC"
         elif mode in ['month', 'week']:
             query = f"SELECT {mapping} FROM hourly_history WHERE device_id=? AND time_label BETWEEN ? AND ? ORDER BY time_label ASC"
-        else:
-            check_raw = conn.execute("SELECT 1 FROM mesures WHERE device_id=? AND date_time BETWEEN ? AND ? LIMIT 1", args).fetchone()
-            if check_raw:
+        elif mode == 'day':
+            if conn.execute("SELECT 1 FROM mesures WHERE device_id=? AND date_time BETWEEN ? AND ? LIMIT 1", args).fetchone():
                 query = "SELECT * FROM mesures WHERE device_id=? AND date_time BETWEEN ? AND ? ORDER BY date_time ASC"
-            else:
-                check_hour = conn.execute("SELECT 1 FROM hourly_history WHERE device_id=? AND time_label BETWEEN ? AND ? LIMIT 1", args).fetchone()
-                if check_hour:
-                    query = f"SELECT {mapping} FROM hourly_history WHERE device_id=? AND time_label BETWEEN ? AND ? ORDER BY time_label ASC"
-                else:
-                    query = f"SELECT {mapping} FROM daily_history WHERE device_id=? AND date(time_label) BETWEEN date(?) AND date(?) ORDER BY time_label ASC"
+            elif conn.execute("SELECT 1 FROM hourly_history WHERE device_id=? AND time_label BETWEEN ? AND ? LIMIT 1", args).fetchone():
+                query = f"SELECT {mapping} FROM hourly_history WHERE device_id=? AND time_label BETWEEN ? AND ? ORDER BY time_label ASC"
 
         rows = conn.execute(query, args).fetchall()
         conn.close()
-        return jsonify([dict(row) for row in rows])
+        return jsonify([dict(row) for row in rows]) # Returns [] if empty, preventing 500 error
     except Exception as e:
+        if conn: conn.close()
         return jsonify({"error": str(e)}), 500
 
 @api_bp.route('/api/limits')

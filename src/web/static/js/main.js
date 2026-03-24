@@ -634,17 +634,17 @@ async function fetchData() {
         if (!response.ok) throw new Error("API Offline");
         const data = await response.json();
 
-        updateText('val-temp', data.temp, '°C');
-        updateText('val-hum', data.hum, '%');
-        updateText('val-gas', data.gas_pct, '%');
-        updateText('val-lux', data.lux, 'Lx');
-        updateText('val-pres', data.press, '');
-        let aqi = data.air_pct || Math.round(data.gas_pct * 1.5);
+        updateText('val-temp', data.temp || 0, '°C');
+        updateText('val-hum', data.hum || 0, '%');
+        updateText('val-gas', data.gas_pct || 0, '%');
+        updateText('val-lux', data.lux || 0, 'Lx');
+        updateText('val-pres', data.press || 0, '');
+        let aqi = Math.round((data.gas_pct || 0) * 1.5);
         updateText('aqi-score', aqi, '');
-        updateBar('bar-temp', data.temp, 50);
-        updateBar('bar-hum', data.hum, 100);
-        updateBar('bar-gas', data.gas_pct, 100);
-        updateBar('bar-lux', data.lux, 1000); 
+        updateBar('bar-temp', data.temp || 0, 50);
+        updateBar('bar-hum', data.hum || 0, 100);
+        updateBar('bar-gas', data.gas_pct || 0, 100);
+        updateBar('bar-lux', data.lux || 0, 1000); 
 
         const statusText = document.getElementById('main-status-text');
         const globalDot = document.getElementById('global-status-dot');

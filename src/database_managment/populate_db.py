@@ -63,7 +63,6 @@ def populate_tiered_db(years=1, num_devices=1):
         lux REAL,
         gas_pct REAL,
         press REAL,
-        air_pct REAL,
         device_id INTEGER
     )''')
 
@@ -104,12 +103,8 @@ def populate_tiered_db(years=1, num_devices=1):
             date = now - timedelta(minutes=m)
             # Unpacking 5 values: temp, hum, lux, gas, press
             t, h, l, g, p = get_sim_val(date, dev_id)
-            # Adding a dummy value for air_pct as it's in the schema but not in get_sim_val
-            a = random.uniform(90, 100) 
-            raw_data.append((date.strftime("%Y-%m-%d %H:%M:%S"),
-                             round(t, 2), int(h), int(l), round(g, 2), round(p, 1), round(a, 1), dev_id))
         
-        cursor.executemany("INSERT INTO mesures (date_time, temp, hum, lux, gas_pct, press, air_pct, device_id) VALUES (?,?,?,?,?,?,?,?)", raw_data)
+        cursor.executemany("INSERT INTO mesures (date_time, temp, hum, lux, gas_pct, press, device_id) VALUES (?,?,?,?,?,?,?)", raw_data)
 
     conn.commit()
     conn.close()
