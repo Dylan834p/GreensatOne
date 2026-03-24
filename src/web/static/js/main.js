@@ -127,6 +127,81 @@ if(themeBtn) {
     });
 }
 
+async function initSondes() {
+    try {
+        const res = await fetch('/api/sondes');
+        availableSondes = await res.json();
+        
+        if (availableSondes.length > 0) {
+            if (!availableSondes.includes(currentSondeId)) {
+                currentSondeId = availableSondes[0];
+            }
+            if (availableSondes.length > 1) {
+                document.getElementById('sonde-pagination').classList.remove('hidden');
+                renderPagination();
+            } else {
+                document.getElementById('sonde-pagination').classList.add('hidden');
+            }
+            updateMainTitle();
+        }
+    } catch (e) { console.error("API Sondes Error:", e); }
+}
+
+function renderPagination() {
+    const container = document.getElementById('sonde-pagination');
+    if(!container) return;
+    
+    const currentIndex = availableSondes.indexOf(currentSondeId);
+    
+    let html = `<button class="page-arrow" onclick="switchSonde('prev')" ${currentIndex === 0 ? 'disabled' : ''}><i class="ph ph-caret-left"></i></button>`;
+    
+    availableSondes.forEach(id => {
+        const isActive = id === currentSondeId ? 'active' : '';
+        html += `<button class="page-btn ${isActive}" onclick="setSonde(${id})">0${id}</button>`;
+    });
+    
+    html += `<button class="page-arrow" onclick="switchSonde('next')" ${currentIndex === availableSondes.length - 1 ? 'disabled' : ''}><i class="ph ph-caret-right"></i></button>`;
+    
+    container.innerHTML = html;
+}
+
+window.switchSonde = function(dir) {
+    const idx = availableSondes.indexOf(currentSondeId);
+    if (dir === 'prev' && idx > 0) setSonde(availableSondes[idx - 1]);
+    else if (dir === 'next' && idx < availableSondes.length - 1) setSonde(availableSondes[idx + 1]);
+}
+
+window.setSonde = function(id) {
+    if (id === currentSondeId) return;
+    currentSondeId = id;
+    sfx.playBeep(1000, 'square', 0.1);
+    logSystem(`[SYSTEM] Switched connection to Sonde 0${id}`);
+    
+    updateMainTitle();
+    renderPagination();
+    
+    // Optimisation : Vider le chart actuel instantanément pour la transition
+    chartHistory = { labels: [], temp: [], hum: [], gas: [], press: [], lux: [] };
+    updateChartData();
+    
+    // Relancer la récupération avec la nouvelle sonde
+    initLimits().then(() => {
+        loadHistoryData();
+        fetchData();
+    });
+}
+
+function updateMainTitle() {
+    const titleEl = document.getElementById('title-sonde-id');
+    if(titleEl) {
+        if(availableSondes.length > 1) {
+            titleEl.innerText = `[0${currentSondeId}]_`;
+        } else {
+            titleEl.innerText = `ONE_`;
+        }
+    }
+}
+
 function updateChartTheme() {
     if (!mainChart) return;
     const gridColor = isLightMode ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)';
@@ -351,10 +426,12 @@ let currentChartMode = 'thermal';
 let viewMode = 'day'; 
 let currentReferenceDate = new Date(); 
 let databaseMinDate = null; 
+let currentSondeId = 1;
+let availableSondes = [];
 
 async function initLimits() {
     try {
-        const res = await fetch('/api/limits');
+        const res = await fetch('/api/limits?sonde=' + currentSondeId);
         const data = await res.json();
         if (data.first_date) databaseMinDate = new Date(data.first_date);
     } catch(e) {}
@@ -445,7 +522,7 @@ let chartHistory = { labels: [], temp: [], hum: [], gas: [], press: [], lux: [] 
 
 async function loadHistoryData() {
     const range = getDateRange();
-    const url = `/api/history?start=${range.start}&end=${range.end}&mode=${viewMode}`;
+    const url = `/api/history?start=${range.start}&end=${range.end}&mode=${viewMode}&sonde=${currentSondeId}`;
 
     try {
         const response = await fetch(url);
@@ -553,7 +630,7 @@ if(document.getElementById('mainChart')) {
 
 async function fetchData() {
     try {
-        const response = await fetch('/api/data');
+        const response = await fetch('/api/data?sonde=' + currentSondeId);
         if (!response.ok) throw new Error("API Offline");
         const data = await response.json();
 
@@ -647,10 +724,14 @@ function startPolling() {
     });
 }
 
-window.addEventListener('load', () => {
+window.addEventListener('load', async () => {
     logSystem("Initializing GreenSat System...");
     initOrb();
     init3DScene();
+    
+    // On charge les sondes disponibles avant de lancer l'interface
+    await initSondes();
+    
     initLimits().then(() => {
         switchTimeRange('day');
         logSystem("Database synced.");
@@ -661,8 +742,7 @@ window.addEventListener('load', () => {
         tl.to("#preloader", { opacity: 0, duration: 0.5, onComplete: () => { const pl = document.getElementById('preloader'); if(pl) pl.remove(); }});
     }
     
-    // Lancement de la boucle intelligente
     startPolling(); 
     
-    logSystem("System Online. Waiting for satellite link...");
+    logSystem(`System Online. Tracking Sonde 0${currentSondeId}...`);
 });
