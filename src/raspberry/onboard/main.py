@@ -1,17 +1,17 @@
 import time
 import json
 import network
-import requests  # ou 'urequests' selon la version de MicroPython
-from machine import Pin, I2C # type: ignore
+import requests
+from machine import Pin, I2C
 from sensors import GasSensor, TempHumSensor, LightSensor, PressureSensor, Alarm
 
-# --- Configuration: Station & Réseau ---
-DEVICE_ID = 1  # 1 pour la station 1, 2 pour la station 2
-WIFI_SSID = "NOM_DE_TON_WIFI"
-WIFI_PASSWORD = "MOT_DE_PASSE_WIFI"
-API_URL = "http://192.168.X.X:5000/api/data"  # L'URL que Jan va te donner
+# --- Configuration ---
+DEVICE_ID = 1
+WIFI_SSID = "QF"
+WIFI_PASSWORD = "Qu!zzFact0ry"
+API_URL = "http://192.168.0.102:5000/upload/raw"
 
-# --- Configuration: Hardware Pins ---
+# Pins
 PIN_DHT_POWER = 14
 PIN_DHT_DATA  = 15
 PIN_BUZZER    = 16
@@ -22,42 +22,50 @@ PIN_SCL_BMP   = 3
 PIN_SDA_LUX   = 0
 PIN_SCL_LUX   = 1
 PIN_BUZZER_POWER = 8
+wlan = None
 
-# --- Connexion Wi-Fi ---
 def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
+    wlan.config(pm=0xa11140)
     if not wlan.isconnected():
-        print("Connexion au réseau Wi-Fi...")
+        print(f"Connecting to '{WIFI_SSID}'...")
         wlan.connect(WIFI_SSID, WIFI_PASSWORD)
-        while not wlan.isconnected():
+        
+        timeout = 15
+        while not wlan.isconnected() and timeout > 0:
             time.sleep(1)
-    print("Wi-Fi Connecté! IP:", wlan.ifconfig()[0])
+            timeout -= 1
+            
+    if wlan.isconnected():
+        print("Connected! IP:", wlan.ifconfig()[0])
+    else:
+        print("WiFi connection failed. Continuing in offline mode.")
 
-# --- Initialization: Power Rails ---
+# Power Rails Initialization
 dht_power = Pin(PIN_DHT_POWER, Pin.OUT)
 bmp_power = Pin(PIN_BMP_POWER, Pin.OUT)
 buzzer_power = Pin(PIN_BUZZER_POWER, Pin.OUT) 
 dht_power.value(1)
 bmp_power.value(1)
 buzzer_power.value(1)
-time.sleep(2)  # Sensor stabilization delay
+time.sleep(2) 
 
-# --- Initialization: Peripherals ---
+# Peripherals & Sensors
 buzzer = Alarm(PIN_BUZZER)
+buzzer.beep(0.5) 
+
 i2c_lux = I2C(0, scl=Pin(PIN_SCL_LUX), sda=Pin(PIN_SDA_LUX), freq=400000)
 i2c_pres = I2C(1, scl=Pin(PIN_SCL_BMP), sda=Pin(PIN_SDA_BMP), freq=400000)
 
-# --- Initialization: Sensor Objects ---
 gas_sensor = GasSensor(PIN_GAS_ADC)
 dht_sensor = TempHumSensor(PIN_DHT_DATA)
 lux_sensor = LightSensor(i2c_lux)
 bmp_sensor = PressureSensor(i2c_pres)
 
-# Démarrage
 gas_sensor.calibrate()
 connect_wifi()
-print("System Initialized. Starting Telemetry...")
+print("System Initialized.")
 
 while True:
     try:
@@ -67,7 +75,7 @@ while True:
         lux = lux_sensor.read()
         pressure = bmp_sensor.read()
         
-        # 2. Data Normalization (Format Dictionnaire pour API)
+        # 2. Prepare Data
         telemetry_packet = {
             "device_id": DEVICE_ID,
             "temp_c": temp if temp is not None else 0.0,
@@ -78,13 +86,14 @@ while True:
             "timestamp": time.time()
         }
 
-        # 3. Envoi des données vers l'URL via Wi-Fi
+        # 3. Transmission
         try:
-            response = requests.post(API_URL, json=telemetry_packet)
-            print(f"Envoyé avec succès (Code: {response.status_code})")
-            response.close() # Très important pour ne pas saturer la mémoire du Pico
+            headers = {'Content-Type': 'application/json'}
+            response = requests.post(API_URL, data=json.dumps(telemetry_packet), headers=headers, timeout=5)
+            print(f"Sent (Status: {response.status_code})")
+            response.close() 
         except Exception as e:
-            print(f"Erreur d'envoi Wi-Fi : {str(e)}")
+            print(f"WiFi Send Error: {e}")
 
         # 4. Safety Logic
         if gas_pct > 30.0:
@@ -93,7 +102,6 @@ while True:
             buzzer.beep(0.5)
 
     except Exception as e:
-        print(json.dumps({"error": str(e)}))
+        print(f"System Error: {e}")
 
-    # 5. Attente stricte de 2 secondes
-    time.sleep(2)
+    time.sleep(1)
