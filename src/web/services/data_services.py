@@ -55,12 +55,12 @@ def prune_raw(conn: sqlite3.Connection):
     Enforces data retention policies via age-based deletion.
     
     Logic:
-    1. Mesures: Deletes raw rows older than 48 hours to save space.
+    1. live_data: Deletes raw rows older than 48 hours to save space.
     2. Hourly: Deletes summarized hours older than 90 days.
     3. Sequence: This must run AFTER aggregation to ensure data is summarized 
        before it is purged.
     """
-    conn.execute("DELETE FROM mesures WHERE date_time < datetime('now', '-48 hours')")
+    conn.execute("DELETE FROM live_data WHERE date_time < datetime('now', '-48 hours')")
     conn.execute("DELETE FROM hourly_history WHERE time_label < datetime('now', '-90 days')")
     conn.commit()
 
@@ -82,7 +82,7 @@ def maybe_vacuum(conn: sqlite3.Connection):
 
 def aggregate_hours(conn: sqlite3.Connection):
     """
-    Summarizes raw 'mesures' into 1-hour windows stored in 'hourly_history'.
+    Summarizes raw 'live_data' into 1-hour windows stored in 'hourly_history'.
     
     Logic:
     1. Grouping: Uses strftime to truncate 'date_time' to the start of its hour.
@@ -111,7 +111,7 @@ def aggregate_hours(conn: sqlite3.Connection):
             MIN(gas_pct), MAX(gas_pct), AVG(gas_pct),
             MIN(press), MAX(press), AVG(press),
             COUNT(*)
-        FROM mesures
+        FROM live_data
         WHERE date_time < strftime('%Y-%m-%d %H:00:00', 'now')
         GROUP BY hour_bucket, device_id
         ON CONFLICT(time_label, device_id) DO UPDATE SET
@@ -181,7 +181,7 @@ def ensure_schema():
 
             # 1. Raw Measurements Table
             cur.execute("""
-                CREATE TABLE IF NOT EXISTS mesures (
+                CREATE TABLE IF NOT EXISTS live_data (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     date_time TEXT,
                     temp REAL,
@@ -211,7 +211,7 @@ def ensure_schema():
             cur.execute(f"CREATE TABLE IF NOT EXISTS daily_history ({history_columns})")
 
             # 3. Performance Indexes
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_mesures_dt ON mesures(date_time)")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_live_data_dt ON live_data(date_time)")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_hourly_dt ON hourly_history(time_label)")
             
             conn.commit()

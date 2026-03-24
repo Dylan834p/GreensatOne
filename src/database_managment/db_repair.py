@@ -27,7 +27,7 @@ def open_db():
 
 def ensure_schema(conn: sqlite3.Connection):
     cur = conn.cursor()
-    cur.execute('''CREATE TABLE IF NOT EXISTS mesures (
+    cur.execute('''CREATE TABLE IF NOT EXISTS live_data (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         date_time TEXT,
         temp REAL,
@@ -41,7 +41,7 @@ def ensure_schema(conn: sqlite3.Connection):
     cur.execute(f"CREATE TABLE IF NOT EXISTS hourly_history (time_label TEXT NOT NULL, {HOURLY_COLS}, PRIMARY KEY(time_label, device_id))")
     cur.execute(f"CREATE TABLE IF NOT EXISTS daily_history (time_label TEXT NOT NULL, {HOURLY_COLS}, PRIMARY KEY(time_label, device_id))")
 
-    cur.execute("CREATE INDEX IF NOT EXISTS idx_mesures_datetime ON mesures(date_time)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_live_data_datetime ON live_data(date_time)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_hourly_time ON hourly_history(time_label)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_daily_time ON daily_history(time_label)")
 
@@ -69,7 +69,7 @@ def repair_hourly(conn: sqlite3.Connection) -> int:
           MIN(gas_pct), MAX(gas_pct), AVG(gas_pct),
           MIN(press), MAX(press), AVG(press),
           COUNT(*)
-        FROM mesures
+        FROM live_data
         WHERE date_time < datetime('now','start of hour')
         GROUP BY hr, device_id
         HAVING COUNT(*) > 0
@@ -121,16 +121,16 @@ def repair_daily(conn: sqlite3.Connection) -> int:
 
 def prune_raw(conn: sqlite3.Connection, retention_hours: int) -> int:
     cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) FROM mesures")
+    cur.execute("SELECT COUNT(*) FROM live_data")
     before = cur.fetchone()[0]
 
     cur.execute(
-        "DELETE FROM mesures WHERE date_time < datetime('now', ?)",
+        "DELETE FROM live_data WHERE date_time < datetime('now', ?)",
         (f"-{retention_hours} hours",)
     )
     conn.commit()
 
-    cur.execute("SELECT COUNT(*) FROM mesures")
+    cur.execute("SELECT COUNT(*) FROM live_data")
     after = cur.fetchone()[0]
     return before - after
 

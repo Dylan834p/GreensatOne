@@ -157,7 +157,7 @@ function renderPagination() {
     
     availableSondes.forEach(id => {
         const isActive = id === currentSondeId ? 'active' : '';
-        html += `<button class="page-btn ${isActive}" onclick="setSonde(${id})">0${id}</button>`;
+        html += `<button class="page-btn ${isActive}" onclick="setSonde(${id})">0${id + 1}</button>`;
     });
     
     html += `<button class="page-arrow" onclick="switchSonde('next')" ${currentIndex === availableSondes.length - 1 ? 'disabled' : ''}><i class="ph ph-caret-right"></i></button>`;
@@ -195,7 +195,7 @@ function updateMainTitle() {
     const titleEl = document.getElementById('title-sonde-id');
     if(titleEl) {
         if(availableSondes.length > 1) {
-            titleEl.innerText = `[0${currentSondeId}]_`;
+            titleEl.innerText = `[0${currentSondeId + 1}]_`;
         } else {
             titleEl.innerText = `ONE_`;
         }
@@ -634,17 +634,17 @@ async function fetchData() {
         if (!response.ok) throw new Error("API Offline");
         const data = await response.json();
 
-        updateText('val-temp', data.temp, '°C');
-        updateText('val-hum', data.hum, '%');
-        updateText('val-gas', data.gas_pct, '%');
-        updateText('val-lux', data.lux, 'Lx');
-        updateText('val-pres', data.press, '');
-        let aqi = data.air_pct || Math.round(data.gas_pct * 1.5);
+        updateText('val-temp', Number(data.temp).toFixed(2) || 0, '°C');
+        updateText('val-hum', Number(data.hum).toFixed(2) || 0, '%');
+        updateText('val-gas', Number(data.gas_pct).toFixed(2) || 0, '%');
+        updateText('val-lux', Number(data.lux).toFixed(0) || 0, 'Lx');
+        updateText('val-pres', Number(data.press).toFixed(2) || 0, '');
+        let aqi = Math.min(100, Math.round((data.gas_pct || 0) * 15));
         updateText('aqi-score', aqi, '');
-        updateBar('bar-temp', data.temp, 50);
-        updateBar('bar-hum', data.hum, 100);
-        updateBar('bar-gas', data.gas_pct, 100);
-        updateBar('bar-lux', data.lux, 1000); 
+        updateBar('bar-temp', Number(data.temp).toFixed(2) || 0, 50);
+        updateBar('bar-hum', Number(data.hum).toFixed(2) || 0, 100);
+        updateBar('bar-gas', Number(data.gas_pct).toFixed(2) || 0, 100);
+        updateBar('bar-lux', Number(data.lux).toFixed(2) || 0, 1000); 
 
         const statusText = document.getElementById('main-status-text');
         const globalDot = document.getElementById('global-status-dot');
