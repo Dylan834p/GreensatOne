@@ -1,9 +1,6 @@
 /* =========================================
-   MAIN.JS - FINAL FUSION (CINEMATIC VISUALS)
+   MAIN.JS - FINAL FUSION (VIDEO BACKGROUND)
    ========================================= */
-
-import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 /* --- 1. CORE SYSTEM & CURSOR --- */
 const cursorOuter = document.getElementById("cursor-outer");
@@ -106,14 +103,27 @@ document.querySelectorAll('button, .chart-tab, .hover-sfx').forEach(el => {
     el.addEventListener('click', () => sfx.playBeep(1200, 'square', 0.1));
 });
 
-/* --- 4. THEME MANAGER --- */
+/* --- 4. THEME & VIDEO MANAGER --- */
 const themeBtn = document.getElementById('theme-toggle');
+const bgVideo = document.getElementById('bg-video'); // Récupération de la vidéo
 let isLightMode = localStorage.getItem('theme') === 'light';
+
+// Fonction pour mettre à jour la vidéo de fond
+function updateVideoBackground(isLight) {
+    if (!bgVideo) return;
+    const newSrc = isLight ? '/static/videos/greensatlightmode.mp4' : '/static/videos/greensatnightmode.mp4';
+    // Évite de recharger la vidéo si c'est déjà la bonne
+    if (!bgVideo.src.includes(newSrc)) {
+        bgVideo.src = newSrc;
+    }
+}
 
 if (isLightMode) {
     document.body.classList.add('light-mode');
     if(themeBtn) themeBtn.innerText = "[ MODE: LIGHT ]";
 }
+// Initialiser la bonne vidéo au chargement
+updateVideoBackground(isLightMode);
 
 if(themeBtn) {
     themeBtn.addEventListener('click', () => {
@@ -121,7 +131,10 @@ if(themeBtn) {
         document.body.classList.toggle('light-mode', isLightMode);
         themeBtn.innerText = isLightMode ? "[ MODE: LIGHT ]" : "[ MODE: DARK ]";
         localStorage.setItem('theme', isLightMode ? 'light' : 'dark');
+        
         updateChartTheme(); 
+        updateVideoBackground(isLightMode); // Changer la vidéo au clic
+        
         sfx.playBeep(600, 'sine', 0.1);
         logSystem(`Theme changed to ${isLightMode ? 'Light' : 'Dark'} Mode.`);
     });
@@ -241,130 +254,7 @@ document.querySelectorAll('.tilt-card').forEach(card => {
     });
 });
 
-/* --- 6. 3D BACKGROUND (OPTIMISÉ) --- */
-function init3DScene() {
-    const canvas = document.querySelector('#scene-3d');
-    if (!canvas) return;
-    
-    const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x1c2e4a, 0.02); 
-
-    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
-    camera.position.z = 8;
-    camera.position.y = 0; 
-    
-    // OPTIMISATION : powerPreference à "default" pour économiser la batterie sur mobile si nécessaire
-    const renderer = new THREE.WebGLRenderer({ 
-        canvas: canvas, 
-        alpha: true, 
-        antialias: true, // Peut être passé à false si encore trop lent
-        powerPreference: "high-performance" 
-    });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    // OPTIMISATION : Bloquer le pixel ratio à 1.5 max pour éviter de tuer les écrans Retina/4K
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-
-    // --- LUMIÈRES OPTIMISÉES ---
-    // Remplacement de AmbientLight + SpotLight par une seule HemisphereLight
-    // Coût GPU très faible, simule bien l'ambiance globale
-    const hemiLight = new THREE.HemisphereLight(0xddeeff, 0x0f172a, 2.0); // Ciel bleuté / Sol sombre
-    scene.add(hemiLight);
-    
-    const sunLight = new THREE.DirectionalLight(0xffdcb4, 2.0); 
-    sunLight.position.set(15, 10, 10);
-    scene.add(sunLight);
-    
-    // SUPPRESSION DE LA SPOTLIGHT (RIM LIGHT) COÛTEUSE
-    // L'effet de "contre-jour" est moins prononcé mais le gain FPS est significatif.
-
-    // --- NUAGES OPTIMISÉS ---
-    const clouds = [];
-    // OPTIMISATION GEOMETRIE : Octahedron (8 faces) au lieu de Dodecahedron (12 faces)
-    const cloudGeo = new THREE.OctahedronGeometry(1, 0); 
-    const cloudMat = new THREE.MeshLambertMaterial({ 
-        color: 0xffffff, 
-        transparent: true, 
-        opacity: 0.25, 
-        flatShading: true,
-        side: THREE.FrontSide // Force le rendu d'une seule face pour éviter des calculs internes inutiles
-    });
-
-    function createCloud(x, y, z, scale) {
-        const cloudGroup = new THREE.Group();
-        // Réduction légère du nombre de sous-éléments par nuage (3 au lieu de 5)
-        for(let i=0; i<3; i++) {
-            const mesh = new THREE.Mesh(cloudGeo, cloudMat);
-            mesh.position.set(Math.random()*1.8 - 0.9, Math.random()*0.6, Math.random()*1.2 - 0.6);
-            mesh.scale.set(1 + Math.random(), 1 + Math.random(), 1 + Math.random());
-            mesh.rotation.z = Math.random() * Math.PI;
-            cloudGroup.add(mesh);
-        }
-        cloudGroup.position.set(x, y, z);
-        cloudGroup.scale.set(scale, scale, scale);
-        scene.add(cloudGroup);
-        clouds.push({ mesh: cloudGroup, speed: 0.001 + Math.random() * 0.002 });
-    }
-
-    createCloud(-6, 3, -5, 0.8);
-    createCloud(6, -2, -4, 1.0);
-    createCloud(0, 4, -8, 1.5);
-    createCloud(-7, -4, -6, 0.7);
-    createCloud(5, 5, -10, 2.0);
-
-    // --- SATELLITE ---
-    let model;
-    new GLTFLoader().load('/static/models/satellite.glb', (gltf) => {
-        model = gltf.scene;
-        model.scale.set(2.8, 2.8, 2.8); 
-        new THREE.Box3().setFromObject(model).getCenter(model.position).multiplyScalar(-1);
-        model.position.y -= 0.5;
-        model.rotation.x = 0.2; 
-        model.rotation.z = 0.1;
-        
-        // Optimisation Matériaux du modèle importé
-        model.traverse((o) => {
-            if (o.isMesh) {
-                // Désactiver les calculs d'ombres inutiles si on ne les utilise pas
-                o.castShadow = false;
-                o.receiveShadow = false;
-            }
-        });
-
-        scene.add(model);
-    });
-
-    function animate() {
-        // Arrêt du rendu si l'onglet n'est pas actif (Gain CPU majeur)
-        if (document.hidden) {
-            setTimeout(() => requestAnimationFrame(animate), 500); 
-            return;
-        }
-    
-        requestAnimationFrame(animate);
-        
-        if (model) {
-            model.rotation.y += 0.0015; 
-            model.rotation.x = Math.sin(Date.now() * 0.0003) * 0.15; 
-            model.position.y = (Math.sin(Date.now() * 0.0005) * 0.3) - 0.5; 
-        }
-        
-        clouds.forEach(c => {
-            c.mesh.position.x += c.speed;
-            if(c.mesh.position.x > 12) c.mesh.position.x = -12;
-        });
-        
-        renderer.render(scene, camera);
-    }
-    animate();
-
-    window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-}
-
-/* --- 7. ORB (STYLE EAU) --- */
+/* --- 6. ORB (STYLE EAU) --- */
 const orbCanvas = document.getElementById('orb-canvas');
 function initOrb() {
     if (!orbCanvas) return;
@@ -400,7 +290,7 @@ function initOrb() {
     draw();
 }
 
-/* --- 8. UI COLOR --- */
+/* --- 7. UI COLOR --- */
 function updateWeatherTheme(temp) {
     const root = document.documentElement;
     if (document.body.classList.contains('light-mode')) return;
@@ -418,7 +308,7 @@ function updateWeatherTheme(temp) {
 }
 
 /* =========================================================================
-   9. DATA & SMART NAVIGATION
+   8. DATA & SMART NAVIGATION
    ========================================================================= */
 
 let mainChart;
@@ -428,6 +318,7 @@ let currentReferenceDate = new Date();
 let databaseMinDate = null; 
 let currentSondeId = 1;
 let availableSondes = [];
+let orbState = 'normal';
 
 async function initLimits() {
     try {
@@ -714,9 +605,7 @@ setInterval(() => {
     if(date) date.innerText = now.toISOString().split('T')[0];
 }, 1000);
 
-// --- DANS main.js (TOUT EN BAS) ---
-
-// Au lieu de setInterval, on utilise une fonction qui se relance elle-même
+// --- FONCTION DE POLLING POUR RAFRAÎCHIR LES DONNÉES ---
 function startPolling() {
     fetchData().then(() => {
         // Une fois qu'on a reçu les données, on attend 10 secondes avant de recommencer
@@ -727,7 +616,6 @@ function startPolling() {
 window.addEventListener('load', async () => {
     logSystem("Initializing GreenSat System...");
     initOrb();
-    init3DScene();
     
     // On charge les sondes disponibles avant de lancer l'interface
     await initSondes();

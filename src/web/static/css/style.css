@@ -53,7 +53,7 @@ body.light-mode {
 
 /* --- RESET & BASE --- */
 body {
-    background-color: var(--c-bg);
+    background-color: transparent !important;
     background-image: radial-gradient(circle at 50% 0%, var(--c-bg-grad-start) 0%, var(--c-bg-grad-end) 60%);
     background-attachment: fixed;
     color: var(--c-text-main);
@@ -61,6 +61,17 @@ body {
     overflow-x: hidden;
     cursor: auto; 
     transition: background 0.5s, color 0.5s; /* Transition fluide lors du switch */
+}
+
+.background-video {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    object-fit: cover;
+    z-index: -1; /* Place la vidéo derrière tout le reste */
+    transition: opacity 0.3s ease;
 }
 
 @media (pointer: fine) { body { cursor: none; } }

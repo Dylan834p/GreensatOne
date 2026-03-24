@@ -13,10 +13,6 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
-
-    <script type="importmap">
-      { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
-    </script>
     
     <style>
         /* --- CSS INTÉGRÉ DEPUIS style.css --- */
@@ -71,21 +67,32 @@
         }
 
         body {
-            background-color: var(--c-bg);
-            background-image: radial-gradient(circle at 50% 0%, var(--c-bg-grad-start) 0%, var(--c-bg-grad-end) 60%);
-            background-attachment: fixed;
+            background-color: transparent; /* Modifié pour laisser voir la vidéo */
             color: var(--c-text-main);
             font-family: var(--font-ui);
             overflow-x: hidden;
             cursor: auto; 
-            transition: background 0.5s, color 0.5s;
+            transition: color 0.5s;
+        }
+
+        /* --- STYLES DE LA VIDÉO DE FOND --- */
+        .background-video {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            z-index: -2; /* S'assure d'être tout au fond */
+            transition: opacity 0.5s ease;
+            pointer-events: none;
         }
 
         @media (pointer: fine) { body { cursor: none; } }
 
         ::selection { background: var(--c-accent-primary); color: #fff; }
         ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: var(--c-bg); }
+        ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: var(--c-border); border-radius: 3px; }
 
         #fluid-canvas { z-index: -1; }
@@ -352,6 +359,10 @@
 </head>
 <body>
 
+    <video id="bg-video" class="background-video" autoplay loop muted playsinline>
+        <source src="{{ url_for('static', filename='videos/greensatnightmode.mp4') }}" type="video/mp4">
+    </video>
+
     <div id="global-status-dot" class="hidden"></div>
 
     <div class="loading-overlay" id="preloader">
@@ -359,7 +370,6 @@
         <div class="loader-line"></div>
     </div>
 
-    <canvas id="scene-3d" style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -1; pointer-events: none; opacity: 0.8;"></canvas>
     <div class="scanlines"></div>
     <div id="cursor-outer"></div>
     <div id="cursor-inner"></div>
@@ -489,7 +499,7 @@
             </div>
         </div>
 
-        <footer class="flex flex-row items-center justify-center mt-6 opacity-30 txt-mono text-xs px-4 gap-4 pb-8" style="color: var(--c-text-muted);">
+        <footer class="flex flex-row items-center justify-center opacity-30 txt-mono text-xs px-4 gap-4 pb-8" style="color: var(--c-text-muted);">
             <div>GREENSAT ONE PROJECT // ID: #GS1-2024-X // <span id="connection-status">SEARCHING SIGNAL...</span></div>
             
             <button id="audio-toggle" class="border border-white/20 px-3 py-1 rounded hover:bg-white/10 transition-colors uppercase cursor-pointer">
