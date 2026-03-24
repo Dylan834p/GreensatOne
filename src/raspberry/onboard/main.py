@@ -7,9 +7,9 @@ from sensors import GasSensor, TempHumSensor, LightSensor, PressureSensor, Alarm
 
 # --- Configuration ---
 DEVICE_ID = 1
-WIFI_SSID = "YOUR_WIFI_NAME"
-WIFI_PASSWORD = "YOUR_WIFI_PASSWORD"
-API_URL = "http://192.168.X.X:5000/api/data"
+WIFI_SSID = "QF"
+WIFI_PASSWORD = "Qu!zzFact0ry"
+API_URL = "http://192.168.0.102:5000/upload/raw"
 
 # Pins
 PIN_DHT_POWER = 14
@@ -22,10 +22,12 @@ PIN_SCL_BMP   = 3
 PIN_SDA_LUX   = 0
 PIN_SCL_LUX   = 1
 PIN_BUZZER_POWER = 8
+wlan = None
 
 def connect_wifi():
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
+    wlan.config(pm=0xa11140)
     if not wlan.isconnected():
         print(f"Connecting to '{WIFI_SSID}'...")
         wlan.connect(WIFI_SSID, WIFI_PASSWORD)
@@ -87,7 +89,7 @@ while True:
         # 3. Transmission
         try:
             headers = {'Content-Type': 'application/json'}
-            response = requests.post(API_URL, data=json.dumps(telemetry_packet), headers=headers)
+            response = requests.post(API_URL, data=json.dumps(telemetry_packet), headers=headers, timeout=5)
             print(f"Sent (Status: {response.status_code})")
             response.close() 
         except Exception as e:
