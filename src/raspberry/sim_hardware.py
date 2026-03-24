@@ -12,7 +12,7 @@ class FakeSerial:
         time.sleep(2) 
         
         data = {
-            "pressure_hpa": round(random.uniform(980, 1010), 1),
+            "pressure": round(random.uniform(980, 1010), 1),
             "time": time.time(),
             "device_id": 1,
             "gas_pct": round(random.uniform(1.0, 5.0), 2),

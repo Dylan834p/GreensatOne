@@ -18,7 +18,7 @@ def upload_raw():
         hum  = data.get("humidity", data.get("hum", 0))
         gas  = data.get("gas_pct", data.get("gas", 0))
         lux  = data.get("lux", 0)
-        pres = data.get("pressure_hpa", data.get("press", 0))
+        pres = data.get("pressure", data.get("press", 0))
         device_id = int(data.get("device_id", data.get("id", 0)))
 
         # Handle Timestamp: Expecting a Unix epoch (float/int)

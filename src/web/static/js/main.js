@@ -638,7 +638,7 @@ async function fetchData() {
         updateText('val-hum', Number(data.hum).toFixed(0) || 0, '%');
         updateText('val-gas', Number(data.gas_pct).toFixed(2) || 0, '%');
         updateText('val-lux', Number(data.lux).toFixed(0) || 0, 'Lx');
-        updateText('val-pres', Number(data.press).toFixed(2) || 0, '');
+        updateText('val-pres', Number(data.press).toFixed(0) || 0, '');
         let aqi = Math.min(100, Math.round((data.gas_pct || 0) * 15));
         updateText('aqi-score', aqi, '');
         updateBar('bar-temp', Number(data.temp).toFixed(2) || 0, 50);
