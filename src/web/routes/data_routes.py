@@ -32,7 +32,7 @@ def upload_raw():
 
         with open_db() as conn:
             conn.execute("""
-                INSERT INTO mesures (date_time, temp, hum, lux, gas_pct, press, device_id)
+                INSERT INTO live_data (date_time, temp, hum, lux, gas_pct, press, device_id)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             """, (formatted_time, temp, hum, lux, gas, pres, device_id))
             conn.commit()

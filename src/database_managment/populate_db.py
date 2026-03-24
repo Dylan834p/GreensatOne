@@ -49,13 +49,13 @@ def populate_tiered_db(years=1, num_devices=1):
     )
 
     # Clean start
-    cursor.execute("DROP TABLE IF EXISTS mesures")
+    cursor.execute("DROP TABLE IF EXISTS live_data")
     cursor.execute("DROP TABLE IF EXISTS hourly_history")
     cursor.execute("DROP TABLE IF EXISTS daily_history")
     
     cursor.execute(f"CREATE TABLE hourly_history (time_label TEXT NOT NULL, {cols_def}, PRIMARY KEY(time_label, device_id))")
     cursor.execute(f"CREATE TABLE daily_history (time_label TEXT NOT NULL, {cols_def}, PRIMARY KEY(time_label, device_id))")
-    cursor.execute('''CREATE TABLE mesures (
+    cursor.execute('''CREATE TABLE live_data (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         date_time TEXT,
         temp REAL,
@@ -63,7 +63,6 @@ def populate_tiered_db(years=1, num_devices=1):
         lux REAL,
         gas_pct REAL,
         press REAL,
-        air_pct REAL,
         device_id INTEGER
     )''')
 
@@ -98,18 +97,18 @@ def populate_tiered_db(years=1, num_devices=1):
             hourly_data.append(tuple(row))
         cursor.executemany(f"INSERT INTO hourly_history VALUES ({','.join(['?']*18)})", hourly_data)
 
-        # 3. Raw Mesures (for specific device)
+        # 3. Raw live_data (for specific device)
         raw_data = []
         for m in range(1440):
             date = now - timedelta(minutes=m)
             # Unpacking 5 values: temp, hum, lux, gas, press
             t, h, l, g, p = get_sim_val(date, dev_id)
-            # Adding a dummy value for air_pct as it's in the schema but not in get_sim_val
-            a = random.uniform(90, 100) 
-            raw_data.append((date.strftime("%Y-%m-%d %H:%M:%S"),
-                             round(t, 2), int(h), int(l), round(g, 2), round(p, 1), round(a, 1), dev_id))
+            
+            # ADD THIS LINE TO ACTUALLY SAVE THE DATA
+            raw_data.append((date.strftime("%Y-%m-%d %H:%M:%S"), t, h, l, g, p, dev_id))
         
-        cursor.executemany("INSERT INTO mesures (date_time, temp, hum, lux, gas_pct, press, air_pct, device_id) VALUES (?,?,?,?,?,?,?,?)", raw_data)
+        # Now this will actually have data to insert
+        cursor.executemany("INSERT INTO live_data (date_time, temp, hum, lux, gas_pct, press, device_id) VALUES (?,?,?,?,?,?,?)", raw_data)
 
     conn.commit()
     conn.close()
