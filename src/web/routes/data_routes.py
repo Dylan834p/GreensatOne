@@ -37,7 +37,7 @@ def upload_raw():
             """, (formatted_time, temp, hum, lux, gas, pres, device_id))
             conn.commit()
 
-        return jsonify({"status": "stored", "at": formatted_time}), 201
+        return jsonify({"status": "stored", "at": formatted_time}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
