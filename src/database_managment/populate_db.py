@@ -1,5 +1,8 @@
 import sqlite3
-import os
+import os, sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 import random
 import math
 from datetime import datetime, timedelta
@@ -80,7 +83,7 @@ def populate_tiered_db(years=1, num_devices=1):
                 row.extend([round(min(vals), 2), round(max(vals), 2), round(sum(vals)/4, 2)])
             row.extend([1440, dev_id])
             daily_data.append(tuple(row))
-        cursor.executemany(f"INSERT INTO daily_history VALUES ({','.join(['?']*17)})", daily_data)
+        cursor.executemany(f"INSERT INTO daily_history VALUES ({','.join(['?']*18)})", daily_data)
 
         # 2. Hourly History (for specific device)
         hourly_data = []
@@ -93,7 +96,7 @@ def populate_tiered_db(years=1, num_devices=1):
                 row.extend([round(min(vals), 2), round(max(vals), 2), round(sum(vals)/2, 2)])
             row.extend([60, dev_id])
             hourly_data.append(tuple(row))
-        cursor.executemany(f"INSERT INTO hourly_history VALUES ({','.join(['?']*17)})", hourly_data)
+        cursor.executemany(f"INSERT INTO hourly_history VALUES ({','.join(['?']*18)})", hourly_data)
 
         # 3. Raw Mesures (for specific device)
         raw_data = []
