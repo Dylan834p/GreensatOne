@@ -1,4 +1,4 @@
-from machine import Pin, ADC, I2C # type: ignore
+from machine import Pin, ADC, I2C, PWM # type: ignore
 import dht # type: ignore
 import time
 import struct
@@ -117,13 +117,15 @@ class PressureSensor:
         
 class Alarm:
     def __init__(self, pin_buzzer):
-        self.buzzer = Pin(pin_buzzer, Pin.OUT)
-        self.buzzer.value(0)
+        self.buzzer_pin = Pin(pin_buzzer, Pin.OUT)
+        self.pwm = PWM(self.buzzer_pin)
+        self.pwm.duty_u16(0) # Éteint au départ
 
     def beep(self, duration=0.1):
-        self.buzzer.value(1)
+        self.pwm.freq(1000)      # Fréquence du son (1000 Hz = son aigu)
+        self.pwm.duty_u16(32768) # Volume (rapport cyclique à 50%)
         time.sleep(duration)
-        self.buzzer.value(0)
+        self.pwm.duty_u16(0)     # Coupe le son
 
     def alert(self):
         """Trigger a priority notification pattern."""
