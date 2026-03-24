@@ -14,7 +14,7 @@ def index():
 def api_sondes():
     conn = open_db()
     if not conn: return jsonify([])
-    rows = conn.execute('SELECT DISTINCT device_id FROM mesures ORDER BY device_id ASC').fetchall()
+    rows = conn.execute('SELECT DISTINCT device_id FROM live_data ORDER BY device_id ASC').fetchall()
     conn.close()
     return jsonify([row['device_id'] for row in rows])
 
@@ -23,7 +23,7 @@ def api_data():
     device_id = request.args.get('sonde', 1, type=int)
     conn = open_db()
     if not conn: return jsonify({"error": "DB Link Down"}), 500
-    row = conn.execute('SELECT * FROM mesures WHERE device_id = ? ORDER BY date_time DESC LIMIT 1', (device_id,)).fetchone()
+    row = conn.execute('SELECT * FROM live_data WHERE device_id = ? ORDER BY date_time DESC LIMIT 1', (device_id,)).fetchone()
     conn.close()
     return jsonify(dict(row)) if row else (jsonify({"error": "Data not found!"}), 200)
 
@@ -50,8 +50,8 @@ def api_history():
         elif mode in ['month', 'week']:
             query = f"SELECT {mapping} FROM hourly_history WHERE device_id=? AND time_label BETWEEN ? AND ? ORDER BY time_label ASC"
         elif mode == 'day':
-            if conn.execute("SELECT 1 FROM mesures WHERE device_id=? AND date_time BETWEEN ? AND ? LIMIT 1", args).fetchone():
-                query = "SELECT * FROM mesures WHERE device_id=? AND date_time BETWEEN ? AND ? ORDER BY date_time ASC"
+            if conn.execute("SELECT 1 FROM live_data WHERE device_id=? AND date_time BETWEEN ? AND ? LIMIT 1", args).fetchone():
+                query = "SELECT * FROM live_data WHERE device_id=? AND date_time BETWEEN ? AND ? ORDER BY date_time ASC"
             elif conn.execute("SELECT 1 FROM hourly_history WHERE device_id=? AND time_label BETWEEN ? AND ? LIMIT 1", args).fetchone():
                 query = f"SELECT {mapping} FROM hourly_history WHERE device_id=? AND time_label BETWEEN ? AND ? ORDER BY time_label ASC"
 
