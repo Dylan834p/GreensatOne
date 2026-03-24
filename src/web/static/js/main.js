@@ -157,7 +157,7 @@ function renderPagination() {
     
     availableSondes.forEach(id => {
         const isActive = id === currentSondeId ? 'active' : '';
-        html += `<button class="page-btn ${isActive}" onclick="setSonde(${id})">0${id}</button>`;
+        html += `<button class="page-btn ${isActive}" onclick="setSonde(${id})">0${id + 1}</button>`;
     });
     
     html += `<button class="page-arrow" onclick="switchSonde('next')" ${currentIndex === availableSondes.length - 1 ? 'disabled' : ''}><i class="ph ph-caret-right"></i></button>`;
@@ -195,7 +195,7 @@ function updateMainTitle() {
     const titleEl = document.getElementById('title-sonde-id');
     if(titleEl) {
         if(availableSondes.length > 1) {
-            titleEl.innerText = `[0${currentSondeId}]_`;
+            titleEl.innerText = `[0${currentSondeId + 1}]_`;
         } else {
             titleEl.innerText = `ONE_`;
         }
