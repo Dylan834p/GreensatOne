@@ -525,8 +525,8 @@ async function fetchData() {
         if (!response.ok) throw new Error("API Offline");
         const data = await response.json();
 
-        updateText('val-temp', Number(data.temp).toFixed(2) || 0, '°C');
-        updateText('val-hum', Number(data.hum).toFixed(2) || 0, '%');
+        updateText('val-temp', Number(data.temp).toFixed(0) || 0, '°C');
+        updateText('val-hum', Number(data.hum).toFixed(0) || 0, '%');
         updateText('val-gas', Number(data.gas_pct).toFixed(2) || 0, '%');
         updateText('val-lux', Number(data.lux).toFixed(0) || 0, 'Lx');
         updateText('val-pres', Number(data.press).toFixed(2) || 0, '');
