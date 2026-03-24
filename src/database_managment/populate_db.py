@@ -103,7 +103,11 @@ def populate_tiered_db(years=1, num_devices=1):
             date = now - timedelta(minutes=m)
             # Unpacking 5 values: temp, hum, lux, gas, press
             t, h, l, g, p = get_sim_val(date, dev_id)
+            
+            # ADD THIS LINE TO ACTUALLY SAVE THE DATA
+            raw_data.append((date.strftime("%Y-%m-%d %H:%M:%S"), t, h, l, g, p, dev_id))
         
+        # Now this will actually have data to insert
         cursor.executemany("INSERT INTO live_data (date_time, temp, hum, lux, gas_pct, press, device_id) VALUES (?,?,?,?,?,?,?)", raw_data)
 
     conn.commit()
