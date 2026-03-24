@@ -1,8 +1,13 @@
 from flask import Flask
+import sys, os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from routes.api_routes import api_bp
 from routes.data_routes import data_bp
 import threading
 from services.data_services import ensure_schema, db_manager
+
 threads = []
 
 app = Flask(__name__)
