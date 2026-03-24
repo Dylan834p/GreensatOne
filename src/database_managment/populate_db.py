@@ -33,7 +33,7 @@ def get_sim_val(current_date, device_id=0):
     press = 1013.0 + random.uniform(-5, 5)
     gas = random.uniform(2, 5) + (random.uniform(10, 20) if random.random() > 0.99 else 0)
     
-    return temp, hum, lux, gas, press
+    return round(temp, 2), round(hum, 2), round(lux, 2), round(gas, 2), round(press, 2)
 
 def populate_tiered_db(years=1, num_devices=1):
     conn = sqlite3.connect(DB_PATH)

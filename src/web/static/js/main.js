@@ -634,17 +634,17 @@ async function fetchData() {
         if (!response.ok) throw new Error("API Offline");
         const data = await response.json();
 
-        updateText('val-temp', data.temp || 0, '°C');
-        updateText('val-hum', data.hum || 0, '%');
-        updateText('val-gas', data.gas_pct || 0, '%');
-        updateText('val-lux', data.lux || 0, 'Lx');
-        updateText('val-pres', data.press || 0, '');
-        let aqi = Math.round((data.gas_pct || 0) * 1.5);
+        updateText('val-temp', Number(data.temp).toFixed(2) || 0, '°C');
+        updateText('val-hum', Number(data.hum).toFixed(2) || 0, '%');
+        updateText('val-gas', Number(data.gas_pct).toFixed(2) || 0, '%');
+        updateText('val-lux', Number(data.lux).toFixed(0) || 0, 'Lx');
+        updateText('val-pres', Number(data.press).toFixed(2) || 0, '');
+        let aqi = Math.min(100, Math.round((data.gas_pct || 0) * 15));
         updateText('aqi-score', aqi, '');
-        updateBar('bar-temp', data.temp || 0, 50);
-        updateBar('bar-hum', data.hum || 0, 100);
-        updateBar('bar-gas', data.gas_pct || 0, 100);
-        updateBar('bar-lux', data.lux || 0, 1000); 
+        updateBar('bar-temp', Number(data.temp).toFixed(2) || 0, 50);
+        updateBar('bar-hum', Number(data.hum).toFixed(2) || 0, 100);
+        updateBar('bar-gas', Number(data.gas_pct).toFixed(2) || 0, 100);
+        updateBar('bar-lux', Number(data.lux).toFixed(2) || 0, 1000); 
 
         const statusText = document.getElementById('main-status-text');
         const globalDot = document.getElementById('global-status-dot');
