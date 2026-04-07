@@ -609,7 +609,7 @@ setInterval(() => {
 function startPolling() {
     fetchData().then(() => {
         // Une fois qu'on a reçu les données, on attend 10 secondes avant de recommencer
-        setTimeout(startPolling, 10000); // 10000 ms = 10 secondes
+        setTimeout(startPolling, 2000); // 10000 ms = 10 secondes
     });
 }
 
