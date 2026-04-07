@@ -32,7 +32,7 @@ def api_history():
     mode = request.args.get('mode', 'day')
     start_date = request.args.get('start')
     end_date = request.args.get('end')
-    device_id = request.args.get('sonde', 1, type=int)
+    device_id = request.args.get('sonde', type=int)
     
     conn = open_db()
     if not conn: return jsonify({"error": "DB Error"}), 500
@@ -42,22 +42,17 @@ def api_history():
     try:
         args = (device_id, start_date, end_date)
         
-        # Default query for 'day' mode if data is missing everywhere
-        query = f"SELECT {mapping} FROM daily_history WHERE device_id=? AND date(time_label) BETWEEN date(?) AND date(?) ORDER BY time_label ASC"
-
-        if mode == 'year':
-            query = f"SELECT {mapping} FROM daily_history WHERE device_id=? AND date(time_label) BETWEEN date(?) AND date(?) ORDER BY time_label ASC"
-        elif mode in ['month', 'week']:
+        # Explicit mapping per viewMode to ensure correct table usage
+        if mode == 'day':
+            query = "SELECT * FROM live_data WHERE device_id=? AND date_time BETWEEN ? AND ? ORDER BY date_time ASC"
+        elif mode in ['week', 'month']:
             query = f"SELECT {mapping} FROM hourly_history WHERE device_id=? AND time_label BETWEEN ? AND ? ORDER BY time_label ASC"
-        elif mode == 'day':
-            if conn.execute("SELECT 1 FROM live_data WHERE device_id=? AND date_time BETWEEN ? AND ? LIMIT 1", args).fetchone():
-                query = "SELECT * FROM live_data WHERE device_id=? AND date_time BETWEEN ? AND ? ORDER BY date_time ASC"
-            elif conn.execute("SELECT 1 FROM hourly_history WHERE device_id=? AND time_label BETWEEN ? AND ? LIMIT 1", args).fetchone():
-                query = f"SELECT {mapping} FROM hourly_history WHERE device_id=? AND time_label BETWEEN ? AND ? ORDER BY time_label ASC"
+        else: # year
+            query = f"SELECT {mapping} FROM daily_history WHERE device_id=? AND time_label BETWEEN ? AND ? ORDER BY time_label ASC"
 
         rows = conn.execute(query, args).fetchall()
         conn.close()
-        return jsonify([dict(row) for row in rows]) # Returns [] if empty, preventing 500 error
+        return jsonify([dict(row) for row in rows])
     except Exception as e:
         if conn: conn.close()
         return jsonify({"error": str(e)}), 500

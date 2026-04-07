@@ -146,9 +146,12 @@ async function initSondes() {
         availableSondes = await res.json();
         
         if (availableSondes.length > 0) {
-            if (!availableSondes.includes(currentSondeId)) {
+            if (availableSondes.includes(1)) {
+                currentSondeId = 0;
+            } else {
                 currentSondeId = availableSondes[0];
             }
+            
             if (availableSondes.length > 1) {
                 document.getElementById('sonde-pagination').classList.remove('hidden');
                 renderPagination();
@@ -170,7 +173,7 @@ function renderPagination() {
     
     availableSondes.forEach(id => {
         const isActive = id === currentSondeId ? 'active' : '';
-        html += `<button class="page-btn ${isActive}" onclick="setSonde(${id})">0${id + 1}</button>`;
+        html += `<button class="page-btn ${isActive}" onclick="setSonde(${id})">0${id}</button>`;
     });
     
     html += `<button class="page-arrow" onclick="switchSonde('next')" ${currentIndex === availableSondes.length - 1 ? 'disabled' : ''}><i class="ph ph-caret-right"></i></button>`;
@@ -187,17 +190,17 @@ window.switchSonde = function(dir) {
 window.setSonde = function(id) {
     if (id === currentSondeId) return;
     currentSondeId = id;
+    
     sfx.playBeep(1000, 'square', 0.1);
-    logSystem(`[SYSTEM] Switched connection to Sonde 0${id}`);
+    logSystem(`[SYSTEM] Switched connection to Sonde ${id}`);
     
     updateMainTitle();
     renderPagination();
     
-    // Optimisation : Vider le chart actuel instantanément pour la transition
+    /* Clear local buffers before new fetch */
     chartHistory = { labels: [], temp: [], hum: [], gas: [], press: [], lux: [] };
     updateChartData();
     
-    // Relancer la récupération avec la nouvelle sonde
     initLimits().then(() => {
         loadHistoryData();
         fetchData();
@@ -208,7 +211,7 @@ function updateMainTitle() {
     const titleEl = document.getElementById('title-sonde-id');
     if(titleEl) {
         if(availableSondes.length > 1) {
-            titleEl.innerText = `[0${currentSondeId + 1}]_`;
+            titleEl.innerText = `[0${currentSondeId}]`;
         } else {
             titleEl.innerText = `ONE_`;
         }
@@ -607,9 +610,9 @@ setInterval(() => {
 
 // --- FONCTION DE POLLING POUR RAFRAÎCHIR LES DONNÉES ---
 function startPolling() {
-    fetchData().then(() => {
-        // Une fois qu'on a reçu les données, on attend 10 secondes avant de recommencer
-        setTimeout(startPolling, 2000); // 10000 ms = 10 secondes
+    /* Prevents overlapping requests if the network is slow */
+    fetchData().finally(() => {
+        setTimeout(startPolling, 2000); 
     });
 }
 
