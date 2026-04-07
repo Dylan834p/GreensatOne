@@ -1,5 +1,6 @@
 from flask import Flask
 import sys, os
+import time
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -19,5 +20,5 @@ if __name__ == '__main__':
     if not ensure_schema():
         exit()
     threading.Thread(target=db_manager, daemon=True).start()
-
+    time.sleep(2)
     app.run(host='0.0.0.0', port=5000, debug=True)
