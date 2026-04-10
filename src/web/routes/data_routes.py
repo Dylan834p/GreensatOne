@@ -22,12 +22,8 @@ def upload_raw():
         device_id = int(data.get("device_id", data.get("id", 0)))
 
         # Handle Timestamp: Expecting a Unix epoch (float/int)
-        raw_ts = data.get("timestamp")
-        if raw_ts:
-            dt_object = datetime.fromtimestamp(float(raw_ts))
-        else:
-            dt_object = datetime.now()
-            
+        dt_object = datetime.now() 
+                    
         formatted_time = dt_object.strftime("%Y-%m-%d %H:%M:%S")
 
         with open_db() as conn:
