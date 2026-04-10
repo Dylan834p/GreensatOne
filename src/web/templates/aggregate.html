@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="fr" class="antialiased">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>GreenSat One | Global Aggregate</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    
+    <style>
+        :root {
+            --c-bg: #0b1018; 
+            --c-bg-grad-start: #1a2233;
+            --c-bg-grad-end: #0b1018;
+            --c-surface: rgba(255, 255, 255, 0.05);
+            --c-surface-hover: rgba(255, 255, 255, 0.1);
+            --c-border: rgba(255, 255, 255, 0.15);
+            --c-border-highlight: rgba(255, 255, 255, 0.4);
+            --c-text-main: #ffffff;
+            --c-text-muted: rgba(255, 255, 255, 0.6);
+            --c-accent-primary: #2e5cff;
+            --c-accent-secondary: #00f2ff;
+            --c-accent-danger: #ff2e5c;
+            --font-ui: 'Inter', sans-serif;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        body.light-mode {
+            --c-bg: #f0f2f5;
+            --c-bg-grad-start: #ffffff;
+            --c-bg-grad-end: #e4e7eb;
+            --c-surface: rgba(255, 255, 255, 0.7);
+            --c-surface-hover: rgba(255, 255, 255, 0.9);
+            --c-border: rgba(0, 0, 0, 0.05);
+            --c-border-highlight: rgba(46, 92, 255, 0.3);
+            --c-text-main: #1a202c;
+            --c-text-muted: rgba(0, 0, 0, 0.5);
+            --c-accent-primary: #2e5cff; 
+        }
+
+        body {
+            background-color: transparent;
+            color: var(--c-text-main);
+            font-family: var(--font-ui);
+            overflow-x: hidden;
+            cursor: auto; 
+            transition: color 0.5s;
+        }
+
+        .background-video {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            object-fit: cover; z-index: -2; pointer-events: none; transition: opacity 0.5s ease;
+        }
+
+        @media (pointer: fine) { body { cursor: none; } }
+        ::selection { background: var(--c-accent-primary); color: #fff; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--c-border); border-radius: 3px; }
+
+        .scanlines {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,0.05) 50%, rgba(0,0,0,0.05));
+            background-size: 100% 4px; z-index: 9000; pointer-events: none; opacity: 0.15;
+        }
+        body.light-mode .scanlines { opacity: 0.05; }
+
+        .glass {
+            background: var(--c-surface); backdrop-filter: blur(5px);
+            border: 1px solid var(--c-border); border-radius: 24px;
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+        }
+        body.light-mode .glass { box-shadow: 0 10px 40px -10px rgba(0,0,0,0.1); border: 1px solid rgba(255,255,255,0.8); }
+
+        .glass-header {
+            border-bottom: 1px solid var(--c-border); padding: 1.5rem;
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(255,255,255,0.03); border-radius: 24px 24px 0 0;
+        }
+        body.light-mode .glass-header { background: rgba(0,0,0,0.02); }
+
+        .chart-tabs { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+        .chart-tab {
+            padding: 0.25rem 0.75rem; font-size: 0.7rem; font-family: var(--font-mono); letter-spacing: 0.05em;
+            border-radius: 99px; background: rgba(255,255,255,0.08); color: var(--c-text-muted);
+            border: 1px solid transparent; transition: all 0.2s; cursor: pointer;
+        }
+        body.light-mode .chart-tab { background: rgba(0,0,0,0.05); }
+        .chart-tab:hover { background: rgba(255,255,255,0.2); color: var(--c-text-main); }
+        body.light-mode .chart-tab:hover { background: rgba(0,0,0,0.1); }
+        .chart-tab.active { background: var(--c-accent-primary); color: #fff; box-shadow: 0 0 20px rgba(46, 92, 255, 0.5); }
+
+        .txt-kinetic { transition: letter-spacing 0.4s ease, text-shadow 0.4s; display: inline-block; }
+        .txt-kinetic:hover { letter-spacing: 0.05em; text-shadow: 0 0 20px rgba(255,255,255,0.6); transform: scale(1.02); }
+        .txt-label { font-family: var(--font-mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.15em; color: var(--c-text-muted); }
+
+        #cursor-outer, #cursor-inner { display: none; pointer-events: none; z-index: 9999; position: fixed; top: 0; left: 0; }
+        @media (pointer: fine) {
+            #cursor-outer {
+                display: block; width: 40px; height: 40px; border: 1px solid rgba(255,255,255,0.5); border-radius: 50%;
+                transition: transform 0.15s ease-out; mix-blend-mode: overlay;
+            }
+            body.light-mode #cursor-outer { border-color: rgba(0,0,0,0.3); mix-blend-mode: normal; }
+            #cursor-inner { display: block; width: 6px; height: 6px; background: white; border-radius: 50%; box-shadow: 0 0 10px white; }
+            body.light-mode #cursor-inner { background: #000; box-shadow: none; }
+        }
+
+        .text-gradient {
+            background: linear-gradient(to right, #fff, rgba(255,255,255,0.7));
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 15px rgba(255,255,255,0.2));
+        }
+        body.light-mode .text-gradient { background: linear-gradient(to right, #1a202c, rgba(26,32,44,0.7)); -webkit-background-clip: text; filter: none; }
+
+        .nav-btn {
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: white;
+            border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; transition: all 0.2s;
+        }
+        body.light-mode .nav-btn { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.1); color: #333; }
+        .nav-btn:hover { background: rgba(255,255,255,0.2); transform: scale(1.1); }
+        
+        .loading-overlay {
+            position: fixed; inset: 0; background: #0b1018; z-index: 10000;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+        }
+        .loader-line { width: 200px; height: 2px; background: rgba(255,255,255,0.1); margin-top: 20px; position: relative; overflow: hidden; }
+        .loader-line::after { content: ''; position: absolute; inset: 0; background: #fff; transform: translateX(-100%); animation: load-anim 1.5s infinite; box-shadow: 0 0 15px white; }
+        @keyframes load-anim { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+    </style>
+</head>
+<body>
+    <video id="bg-video" class="background-video" autoplay loop muted playsinline>
+        <source src="{{ url_for('static', filename='videos/greensatnightmode.mp4') }}" type="video/mp4">
+    </video>
+
+    <div class="loading-overlay" id="preloader">
+        <div class="font-mono text-sm tracking-widest mb-4" style="color: var(--c-text-main);">FETCHING ALL PROBES</div>
+        <div class="loader-line"></div>
+    </div>
+
+    <div class="scanlines"></div>
+    <div id="cursor-outer"></div>
+    <div id="cursor-inner"></div>
+
+    <main class="relative z-10 min-h-screen flex flex-col pt-6 md:pt-10 pb-10 px-4 md:px-12">
+        <header class="mb-6 flex flex-col md:flex-row justify-between md:items-start items-center gap-4 relative z-20">
+            <div>
+                <h1 class="text-4xl md:text-6xl lg:text-7xl font-black tracking-tighter text-gradient leading-none txt-kinetic">
+                    GREENSAT<br><span class="text-2xl md:text-4xl lg:text-5xl" style="color: var(--c-accent-secondary);">AGGREGATE_</span>
+                </h1>
+                <a href="/" class="mt-4 inline-flex items-center px-5 py-2 rounded-full border border-white/20 text-sm font-mono hover:bg-white/10 transition-colors" style="color: var(--c-text-main); backdrop-filter: blur(5px);">
+                    <i class="ph ph-arrow-left mr-2"></i> RETURN TO DASHBOARD
+                </a>
+            </div>
+            <div class="text-center md:text-right">
+                <div class="txt-label mb-1">LOCAL TIME</div>
+                <div class="font-mono text-xl md:text-2xl" id="clock-display" style="color: var(--c-text-main);">00:00:00</div>
+                <div class="hidden md:block txt-label mt-2" id="date-display" style="color: var(--c-text-muted);">YYYY-MM-DD</div>
+            </div>
+        </header>
+
+        <div class="glass flex-1 flex flex-col w-full max-w-[1600px] mx-auto min-h-[600px]">
+            <div class="glass-header flex-col lg:flex-row items-start lg:items-center gap-4">
+                <div class="flex items-center gap-4 flex-wrap">
+                    <span class="txt-label">PARAMETER</span>
+                    <div class="chart-tabs">
+                        <button class="chart-tab param-tab" onclick="switchParam('temp')">THERMAL</button>
+                        <button class="chart-tab param-tab" onclick="switchParam('hum')">HYGRO</button>
+                        <button class="chart-tab param-tab" onclick="switchParam('gas_pct')">GAS PPM</button>
+                        <button class="chart-tab param-tab" onclick="switchParam('lux')">LUMINOSITY</button>
+                        <button class="chart-tab param-tab" onclick="switchParam('press')">PRESSURE</button>
+                    </div>
+                </div>
+                <div class="flex items-center gap-4 lg:ml-auto border-t lg:border-t-0 lg:border-l border-white/10 pt-2 lg:pt-0 lg:pl-4 w-full lg:w-auto">
+                    <span class="txt-label">RANGE</span>
+                    <div class="chart-tabs">
+                        <button class="chart-tab time-tab active" onclick="switchRange('day')">24H</button>
+                        <button class="chart-tab time-tab" onclick="switchRange('week')">7D</button>
+                        <button class="chart-tab time-tab" onclick="switchRange('month')">30D</button>
+                        <button class="chart-tab time-tab" onclick="switchRange('year')">1Y</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex items-center justify-center gap-4 pt-4 pb-2 border-b border-white/5">
+                <button class="nav-btn" onclick="changeAggDate(-1)"><i class="ph ph-caret-left"></i></button>
+                <span id="nav-label" class="font-mono text-sm font-bold text-center" style="color: var(--c-accent-secondary); min-width: 150px;">Current View</span>
+                <button class="nav-btn" id="nav-next" onclick="changeAggDate(1)"><i class="ph ph-caret-right"></i></button>
+            </div>
+
+            <div class="flex-1 p-4 md:p-6 relative min-h-[400px]">
+                <canvas id="aggregateChart"></canvas>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        /* --- CURSOR & CLOCK --- */
+        const cursorOuter = document.getElementById("cursor-outer");
+        const cursorInner = document.getElementById("cursor-inner");
+        let mouseX = 0, mouseY = 0, cursorX = 0, cursorY = 0;
+        
+        if (cursorOuter && cursorInner) {
+            document.addEventListener("mousemove", (e) => {
+                mouseX = e.clientX; mouseY = e.clientY;
+                cursorInner.style.transform = `translate(${mouseX}px, ${mouseY}px)`;
+            }, { passive: true });
+            function animateCursor() {
+                cursorX += (mouseX - cursorX) * 0.15; cursorY += (mouseY - cursorY) * 0.15;
+                cursorOuter.style.transform = `translate(${cursorX - 20}px, ${cursorY - 20}px)`;
+                requestAnimationFrame(animateCursor);
+            }
+            animateCursor();
+        }
+
+        setInterval(() => {
+            const now = new Date();
+            const clock = document.getElementById('clock-display');
+            const date = document.getElementById('date-display');
+            if(clock) clock.innerText = now.toLocaleTimeString('fr-FR');
+            if(date) date.innerText = now.toISOString().split('T')[0];
+        }, 1000);
+
+        /* --- THEME --- */
+        let isLightMode = localStorage.getItem('theme') === 'light';
+        if(isLightMode) document.body.classList.add('light-mode');
+        const bgVideo = document.getElementById('bg-video');
+        if (bgVideo) bgVideo.src = isLightMode ? '/static/videos/greensatlightmode.mp4' : '/static/videos/greensatnightmode.mp4';
+
+        /* --- AGGREGATOR LOGIC --- */
+        const urlParams = new URLSearchParams(window.location.search);
+        let currentParam = urlParams.get('param') || 'temp';
+        let currentRange = 'day';
+        let refDate = new Date();
+        let availableSondes = [];
+        let aggChart;
+        
+        const colors = ['#ff2e5c', '#2e5cff', '#00ffa3', '#ffb800', '#00f2ff', '#da70d6', '#ff8c00', '#b0b0b0'];
+
+        document.querySelectorAll('.param-tab').forEach(el => {
+            if (el.getAttribute('onclick').includes(currentParam)) el.classList.add('active');
+        });
+
+        async function initAggregator() {
+            try {
+                const res = await fetch('/api/sondes');
+                availableSondes = await res.json();
+            } catch(e) { console.error(e); }
+            initChart();
+            loadAggData();
+        }
+
+        function initChart() {
+            const ctx = document.getElementById('aggregateChart').getContext('2d');
+            const textColor = isLightMode ? "rgba(0,0,0,0.7)" : "rgba(255,255,255,0.5)";
+            const gridColor = isLightMode ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.05)';
+            Chart.defaults.font.family = "'JetBrains Mono', monospace";
+            Chart.defaults.color = textColor;
+
+            aggChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: {
+                    responsive: true, maintainAspectRatio: false, animation: { duration: 500 },
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { 
+                        legend: { display: true, position: 'top', labels: { color: textColor, usePointStyle: true, boxWidth: 8 } },
+                        tooltip: { enabled: true } 
+                    },
+                    scales: {
+                        x: { grid: { display: false }, ticks: { maxTicksLimit: 12, color: textColor } },
+                        y: { grid: { color: gridColor }, ticks: { color: textColor } }
+                    }
+                }
+            });
+        }
+
+        function formatDateTimeISO(d) {
+            const pad = (n) => n.toString().padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        }
+
+        function getAggDateRange() {
+            let start = new Date(refDate); let end = new Date(refDate);
+            if (currentRange === 'day') {
+                start.setHours(0,0,0,0); end.setHours(23,59,59);
+                return { start: formatDateTimeISO(start), end: formatDateTimeISO(end), label: (start.toDateString() === new Date().toDateString()) ? "LIVE TODAY" : `${start.getDate()}/${start.getMonth()+1}/${start.getFullYear()}` };
+            } else if (currentRange === 'week') {
+                const day = start.getDay() || 7; 
+                start.setHours(day !== 1 ? -24 * (day - 1) : 0,0,0,0);
+                end = new Date(start); end.setDate(start.getDate() + 6); end.setHours(23,59,59);
+                return { start: formatDateTimeISO(start), end: formatDateTimeISO(end), label: `${start.getDate()}/${start.getMonth()+1} - ${end.getDate()}/${end.getMonth()+1}` };
+            } else if (currentRange === 'month') {
+                start.setDate(1); start.setHours(0,0,0,0);
+                end = new Date(start); end.setMonth(start.getMonth() + 1); end.setDate(0); end.setHours(23,59,59);
+                return { start: formatDateTimeISO(start), end: formatDateTimeISO(end), label: start.toLocaleString('en-US', { month: 'long', year: 'numeric' }).toUpperCase() };
+            } else if (currentRange === 'year') {
+                start.setMonth(0, 1); start.setHours(0,0,0,0);
+                end = new Date(start); end.setFullYear(start.getFullYear() + 1); end.setDate(0); end.setHours(23,59,59);
+                return { start: formatDateTimeISO(start), end: formatDateTimeISO(end), label: start.getFullYear() };
+            }
+        }
+
+        function formatLabel(rawDate, mode) {
+            if(!rawDate) return "---";
+            const dtStr = String(rawDate);
+            if (mode === 'day') {
+                const match = dtStr.match(/(\d{2}:\d{2})/);
+                return match ? match[1] : dtStr;
+            } else {
+                const d = new Date(dtStr);
+                if (isNaN(d)) return dtStr;
+                if (mode === 'week') return `${d.getDate()}/${d.getMonth()+1} ${d.getHours()}h`;
+                if (mode === 'month') return `${d.getDate()}/${d.getMonth()+1}`;
+                if (mode === 'year') return `${d.getMonth()+1}/${d.getFullYear()}`;
+            }
+        }
+
+        async function loadAggData() {
+            const range = getAggDateRange();
+            document.getElementById('nav-label').innerText = range.label;
+            
+            const promises = availableSondes.map(sondeId => 
+                fetch(`/api/history?start=${range.start}&end=${range.end}&mode=${currentRange}&sonde=${sondeId}`).then(res => res.json())
+            );
+            
+            try {
+                const results = await Promise.all(promises);
+                let labels = [];
+                for(const res of results) {
+                    if(res.length > 0) {
+                        labels = res.map(d => formatLabel(d.date_time || d.time_label, currentRange));
+                        break;
+                    }
+                }
+                
+                const datasets = [];
+                results.forEach((data, index) => {
+                    const sondeId = availableSondes[index];
+                    const color = colors[index % colors.length];
+                    let paramData = data.map(d => {
+                        if (!d) return null;
+                        if (currentParam === 'gas_pct') return d.gas_pct ?? d.gas ?? 0;
+                        return d[currentParam] ?? 0;
+                    });
+                    
+                    datasets.push({
+                        label: `Probe 0${sondeId}`,
+                        data: paramData,
+                        borderColor: color,
+                        backgroundColor: color + '1A', 
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHitRadius: 10,
+                        borderWidth: 2
+                    });
+                });
+                
+                aggChart.data.labels = labels;
+                aggChart.data.datasets = datasets;
+                aggChart.update();
+            } catch (e) { console.error("Aggregation Fetch Error:", e); }
+        }
+
+        window.changeAggDate = function(dir) {
+            if (currentRange === 'day') refDate.setDate(refDate.getDate() + dir);
+            else if (currentRange === 'week') refDate.setDate(refDate.getDate() + (dir * 7));
+            else if (currentRange === 'month') refDate.setMonth(refDate.getMonth() + dir);
+            else if (currentRange === 'year') refDate.setFullYear(refDate.getFullYear() + dir);
+            loadAggData();
+        }
+
+        window.switchParam = function(param) {
+            currentParam = param;
+            document.querySelectorAll('.param-tab').forEach(el => el.classList.remove('active'));
+            event.target.classList.add('active');
+            loadAggData();
+        }
+
+        window.switchRange = function(range) {
+            currentRange = range;
+            refDate = new Date();
+            document.querySelectorAll('.time-tab').forEach(el => el.classList.remove('active'));
+            event.target.classList.add('active');
+            loadAggData();
+        }
+
+        window.addEventListener('load', () => {
+            initAggregator();
+            if(typeof gsap !== 'undefined') {
+                gsap.to("#preloader", { opacity: 0, duration: 0.5, onComplete: () => { 
+                    const pl = document.getElementById('preloader'); 
+                    if(pl) pl.remove(); 
+                }});
+            } else {
+                const pl = document.getElementById('preloader'); 
+                if(pl) pl.remove();
+            }
+        });
+    </script>
+</body>
+</html>

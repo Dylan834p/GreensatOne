@@ -355,6 +355,16 @@
             font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; color: var(--c-accent-secondary);
             font-weight: 700; min-width: 150px; text-align: center;
         }
+
+        /* --- LIGHT MODE VISIBILITY FIXES --- */
+        body.light-mode .mix-blend-overlay {
+            mix-blend-mode: normal; /* Disables the overlay blending so the dark text renders solidly */
+        }
+
+        body.light-mode .txt-value-lg {
+            /* Replaces the white glow with a subtle dark shadow for contrast against the 3D canvas */
+            text-shadow: 0 4px 15px rgba(0, 0, 0, 0.15); 
+        }
     </style>
 </head>
 <body>

@@ -327,3 +327,4 @@ body.light-mode .page-btn:hover { background: rgba(0,0,0,0.05); color: #333; }
 .page-arrow:hover:not(:disabled) { color: var(--c-text-main); }
 body.light-mode .page-arrow:hover:not(:disabled) { color: #333; }
 .page-arrow:disabled { opacity: 0.3; cursor: not-allowed; }
+

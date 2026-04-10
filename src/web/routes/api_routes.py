@@ -10,6 +10,10 @@ api_bp = Blueprint('api', __name__)
 def index():
     return render_template('index.html')
 
+@api_bp.route('/aggregate')
+def aggregate():
+    return render_template('aggregate.html')
+
 @api_bp.route('/api/sondes')
 def api_sondes():
     conn = open_db()
